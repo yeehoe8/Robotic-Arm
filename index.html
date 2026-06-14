@@ -5,268 +5,59 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>6-DOF Robot Control Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <style>
-        :root {
-            --bg-main: #0b0f19;
-            --bg-panel: #131c31;
-            --bg-card: #1e293b;
-            --border-color: #334155;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --accent-cyan: #0ea5e9;
-            --accent-cyan-hover: #38bdf8;
-            --accent-orange: #f59e0b;
-            --accent-green: #10b981;
-            --danger: #ef4444;
-        }
-
-        body { 
-            font-family: 'Inter', sans-serif; 
-            margin: 0; 
-            padding: 0; 
-            display: flex; 
-            background-color: var(--bg-main); 
-            color: var(--text-main); 
-            height: 100vh; 
-            overflow: hidden; 
-        }
-
-        /* --- SIDEBAR --- */
-        #sidebar { 
-            width: 380px; 
-            background-color: var(--bg-panel); 
-            border-right: 1px solid var(--border-color);
-            padding: 25px; 
-            box-shadow: 4px 0 15px rgba(0,0,0,0.3); 
-            overflow-y: auto; 
-            z-index: 5; 
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        #sidebar::-webkit-scrollbar { width: 8px; }
-        #sidebar::-webkit-scrollbar-track { background: var(--bg-panel); }
-        #sidebar::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
-
-        h2 { 
-            font-size: 1.4rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border-bottom: 2px solid var(--accent-cyan); 
-            padding-bottom: 10px; 
-            margin: 0 0 5px 0; 
-            color: #fff;
-        }
-        
-        h3 { 
-            font-size: 0.95rem; 
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin: 0 0 15px 0; 
-            color: var(--text-muted); 
-        }
-
-        /* --- CARDS & PANELS --- */
-        .slider-group { 
-            background: var(--bg-card); 
-            padding: 18px; 
-            border-radius: 12px; 
-            border: 1px solid var(--border-color);
-            transition: border-color 0.3s;
-        }
+        :root { --bg-main: #0b0f19; --bg-panel: #131c31; --bg-card: #1e293b; --border-color: #334155; --text-main: #f8fafc; --text-muted: #94a3b8; --accent-cyan: #0ea5e9; --accent-cyan-hover: #38bdf8; --accent-orange: #f59e0b; --accent-green: #10b981; --danger: #ef4444; }
+        body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; display: flex; background-color: var(--bg-main); color: var(--text-main); height: 100vh; overflow: hidden; }
+        #sidebar { width: 380px; background-color: var(--bg-panel); border-right: 1px solid var(--border-color); padding: 25px; box-shadow: 4px 0 15px rgba(0,0,0,0.3); overflow-y: auto; z-index: 5; display: flex; flex-direction: column; gap: 20px; }
+        #sidebar::-webkit-scrollbar { width: 8px; } #sidebar::-webkit-scrollbar-track { background: var(--bg-panel); } #sidebar::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+        h2 { font-size: 1.4rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid var(--accent-cyan); padding-bottom: 10px; margin: 0 0 5px 0; color: #fff; }
+        h3 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 15px 0; color: var(--text-muted); }
+        .slider-group { background: var(--bg-card); padding: 18px; border-radius: 12px; border: 1px solid var(--border-color); transition: border-color 0.3s; }
         .slider-group:hover { border-color: #475569; }
-        
         .panel-highlight { border-top: 3px solid var(--accent-cyan); }
         .panel-hardware { border-top: 3px solid var(--accent-green); }
-
-        .slider-header { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center;
-            margin-bottom: 12px; 
-            font-weight: 600; 
-            font-size: 0.95rem;
-        }
-
-        /* --- CUSTOM SLIDERS --- */
-        input[type=range] { 
-            appearance: none;
-            -webkit-appearance: none; 
-            width: 100%; 
-            background: transparent; 
-            cursor: pointer; 
-        }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 6px;
-            background: #0f172a;
-            border-radius: 3px;
-            border: 1px solid #334155;
-        }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 16px;
-            width: 16px;
-            border-radius: 50%;
-            background: var(--accent-cyan);
-            margin-top: -6px;
-            box-shadow: 0 0 10px rgba(14, 165, 233, 0.5);
-            transition: transform 0.1s;
-        }
-        input[type=range]:active::-webkit-slider-thumb {
-            transform: scale(1.2);
-            background: #fff;
-        }
-
-        /* --- INPUTS & BUTTONS --- */
+        .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 600; font-size: 0.95rem; }
+        input[type=range] { appearance: none; -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #0f172a; border-radius: 3px; border: 1px solid #334155; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-cyan); margin-top: -6px; box-shadow: 0 0 10px rgba(14, 165, 233, 0.5); transition: transform 0.1s; }
+        input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); background: #fff; }
         .flex-row { display: flex; gap: 10px; align-items: center; }
-        
-        input[type=text], input[type=number] { 
-            width: 100%; 
-            padding: 10px; 
-            background: #0f172a; 
-            border: 1px solid var(--border-color); 
-            color: #fff; 
-            border-radius: 6px; 
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
-            transition: outline 0.2s;
-        }
-        input[type=text]:focus, input[type=number]:focus {
-            outline: 2px solid var(--accent-cyan);
-            border-color: transparent;
-        }
-
-        .joint-input {
-            width: 65px !important;
-            padding: 4px 8px !important;
-            background: rgba(15, 23, 42, 0.5) !important;
-            color: var(--accent-cyan) !important;
-            border: 1px solid var(--border-color) !important;
-            text-align: right;
-            border-radius: 4px;
-        }
-        .joint-input::-webkit-outer-spin-button,
-        .joint-input::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-
+        input[type=text], input[type=number] { width: 100%; padding: 10px; background: #0f172a; border: 1px solid var(--border-color); color: #fff; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; transition: outline 0.2s; }
+        input[type=text]:focus, input[type=number]:focus { outline: 2px solid var(--accent-cyan); border-color: transparent; }
+        .joint-input { width: 65px !important; padding: 4px 8px !important; background: rgba(15, 23, 42, 0.5) !important; color: var(--accent-cyan) !important; border: 1px solid var(--border-color) !important; text-align: right; border-radius: 4px; }
+        .joint-input::-webkit-outer-spin-button, .joint-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .ik-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
         .ik-inputs label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted); gap: 5px; }
-
-        button { 
-            background: linear-gradient(135deg, var(--accent-cyan), #0284c7); 
-            color: #fff; 
-            border: none; 
-            padding: 12px; 
-            width: 100%; 
-            border-radius: 8px; 
-            font-weight: 700; 
-            font-size: 0.9rem;
-            letter-spacing: 0.5px;
-            cursor: pointer; 
-            transition: all 0.2s ease; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
-        button:hover { 
-            background: linear-gradient(135deg, var(--accent-cyan-hover), var(--accent-cyan)); 
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(14, 165, 233, 0.3);
-        }
+        button { background: linear-gradient(135deg, var(--accent-cyan), #0284c7); color: #fff; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: 700; font-size: 0.9rem; letter-spacing: 0.5px; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        button:hover { background: linear-gradient(135deg, var(--accent-cyan-hover), var(--accent-cyan)); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(14, 165, 233, 0.3); }
         button:active { transform: translateY(0); }
         button:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; box-shadow: none; transform: none; }
-        
         .btn-home { background: linear-gradient(135deg, var(--accent-orange), #d97706); }
         .btn-home:hover { background: linear-gradient(135deg, #fbbf24, var(--accent-orange)); box-shadow: 0 6px 12px rgba(245, 158, 11, 0.3); }
         .btn-hardware { background: linear-gradient(135deg, var(--accent-green), #059669); }
         .btn-hardware:hover { background: linear-gradient(135deg, #34d399, var(--accent-green)); box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3); }
-
-        /* --- PLOT & HUD --- */
         #plot-container { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; background-color: var(--bg-main); outline: none; }
-        
-        .data-readout { 
-            position: absolute; 
-            top: 25px; 
-            right: 25px; 
-            background: rgba(15, 23, 42, 0.65); 
-            padding: 20px 25px; 
-            border-radius: 12px; 
-            border: 1px solid rgba(14, 165, 233, 0.2);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            font-family: 'JetBrains Mono', monospace; 
-            font-size: 1rem;
-            color: var(--text-muted);
-            z-index: 10;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-        }
-        .data-readout strong { 
-            color: #fff; 
-            font-size: 1.1rem; 
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border-bottom: 1px solid var(--border-color); 
-            padding-bottom: 10px; 
-            margin-bottom: 15px; 
-            display: block; 
-        }
-        .data-readout span { 
-            color: var(--accent-cyan); 
-            font-weight: 700; 
-            display: inline-block; 
-            width: 75px; 
-            text-align: right;
-        }
+        .data-readout { position: absolute; top: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 20px 25px; border-radius: 12px; border: 1px solid rgba(14, 165, 233, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'JetBrains Mono', monospace; font-size: 1rem; color: var(--text-muted); z-index: 10; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        .data-readout strong { color: #fff; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; display: block; }
+        .data-readout span { color: var(--accent-cyan); font-weight: 700; display: inline-block; width: 75px; text-align: right; }
         .coord-line { margin-bottom: 10px; display: flex; justify-content: space-between; width: 160px; }
-
-        .bt-floating-status {
-            position: absolute;
-            bottom: 25px;
-            right: 25px;
-            background: rgba(15, 23, 42, 0.65);
-            padding: 12px 20px;
-            border-radius: 12px;
-            border: 1px solid rgba(16, 185, 129, 0.2);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            font-family: 'Inter', sans-serif;
-            font-size: 0.95rem;
-            color: var(--text-main);
-            z-index: 10;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .bt-indicator-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--danger);
-            box-shadow: 0 0 8px var(--danger);
-            transition: background 0.3s, box-shadow 0.3s;
-        }
-        
-        /* 3D Canvas Styles */
+        .bt-floating-status { position: absolute; bottom: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 12px 20px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'Inter', sans-serif; font-size: 0.95rem; color: var(--text-main); z-index: 10; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display: flex; align-items: center; gap: 12px; }
+        .bt-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 8px var(--danger); transition: background 0.3s, box-shadow 0.3s; }
         canvas { display: block; outline: none; }
     </style>
 </head>
 <body>
-
     <div id="sidebar">
         <h2>Control Panel</h2>
         
         <div class="slider-group panel-hardware">
-            <h3 style="color: var(--accent-green);">Hardware Link</h3>
+            <h3 style="color: var(--accent-green);">USB Serial Link</h3>
             <div class="flex-row">
                 <input type="text" id="comPort" value="COM10" placeholder="COM Port">
-                <button onclick="connectBT()" class="btn-hardware">Connect</button>
+                <button onclick="connectSerial()" class="btn-hardware">Connect</button>
             </div>
         </div>
 
@@ -275,12 +66,12 @@
         <div id="slidersContainer">
             <script>
                 const customLimits = [
-                    { min: -90, max: 65.5 },  // Joint 1
-                    { min: -60, max: 60 },    // Joint 2
-                    { min: -55, max: 19 },    // Joint 3
-                    { min: -135, max: 135 },  // Joint 4
-                    { min: -90, max: 90 },    // Joint 5
-                    { min: -90, max: 90 }     // Joint 6
+                    { min: -90, max: 65.5 },  
+                    { min: -60, max: 60 },    
+                    { min: -55, max: 19 },    
+                    { min: -135, max: 135 },  
+                    { min: -90, max: 90 },    
+                    { min: -90, max: 90 }     
                 ];
                 
                 for (let i = 1; i <= 6; i++) {
@@ -289,22 +80,11 @@
                             <div class="slider-header">
                                 <span style="color: #cbd5e1;">Joint ${i} <span style="color:var(--text-muted); font-size:0.8em;">(&theta;${i})</span></span>
                                 <div style="display: flex; align-items: center; gap: 4px;">
-                                    <input type="number" id="num${i}" class="joint-input"
-                                        min="${customLimits[i-1].min}" 
-                                        max="${customLimits[i-1].max}" 
-                                        step="0.1" 
-                                        value="0.0"
-                                        onchange="syncFromInput(${i})"
-                                        onkeyup="if(event.key === 'Enter') syncFromInput(${i})">
+                                    <input type="number" id="num${i}" class="joint-input" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0.0" onchange="syncFromInput(${i})" onkeyup="if(event.key === 'Enter') syncFromInput(${i})">
                                     <span style="color:var(--accent-cyan); font-family:'JetBrains Mono', monospace;">&deg;</span>
                                 </div>
                             </div>
-                            <input type="range" id="q${i}" 
-                                min="${customLimits[i-1].min}" 
-                                max="${customLimits[i-1].max}" 
-                                step="0.1" 
-                                value="0" 
-                                oninput="updateRobot()">
+                            <input type="range" id="q${i}" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0" oninput="updateRobot()">
                         </div>
                     `);
                 }
@@ -337,45 +117,37 @@
     </div>
 
     <script>
-        // --- THREE.JS SCENE SETUP ---
         const container = document.getElementById('plot-container');
         const scene = new THREE.Scene();
         scene.background = new THREE.Color('#0b0f19'); 
         
-        // Add Grid Floor
         const gridHelper = new THREE.GridHelper(1200, 24, 0x1e293b, 0x1e293b);
         scene.add(gridHelper);
 
-        // Add Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(500, 1000, 500);
         scene.add(directionalLight);
 
-        // Camera Setup
         const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 3000);
         camera.position.set(500, 400, 600); 
         
-        // Renderer Setup
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(container.clientWidth, container.clientHeight);
         container.appendChild(renderer.domElement);
 
-        // OrbitControls
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         controls.target.set(0, 200, 0);
 
-        // Resize handler
         window.addEventListener('resize', () => {
             camera.aspect = container.clientWidth / container.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(container.clientWidth, container.clientHeight);
         });
 
-        // Animation Loop
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
@@ -383,17 +155,14 @@
         }
         animate();
 
-        // --- MATERIALS ---
         const matGray = new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.8 }); 
         const matSilver = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 }); 
         const matNode = new THREE.MeshStandardMaterial({ color: 0x0ea5e9 }); 
 
-        // Storage arrays for dynamic 3D objects
         let linkCylinders = [];
         let jointNodes = [];
 
-        // --- BLUETOOTH & KINEMATICS LOGIC ---
-        async function connectBT() {
+        async function connectSerial() {
             let port = document.getElementById('comPort').value;
             let statusText = document.getElementById('btText');
             let indicator = document.getElementById('btIndicator');
@@ -403,11 +172,11 @@
             indicator.style.boxShadow = "0 0 8px #f59e0b";
 
             try {
-                const response = await fetch(`http://127.0.0.1:8000/connect_bt?port=${port}`);
+                const response = await fetch(`http://127.0.0.1:8000/connect_serial?port=${port}`);
                 const data = await response.json();
 
                 if (data.status === "success") {
-                    statusText.innerText = `Connected`;
+                    statusText.innerText = `Connected via USB`;
                     indicator.style.background = "#10b981"; 
                     indicator.style.boxShadow = "0 0 8px #10b981";
                 } else {
@@ -427,7 +196,7 @@
 
         function pushToHardware(q) {
             let now = Date.now();
-            if (now - lastSendTime > 50) {
+            if (now - lastSendTime > 30) {
                 lastSendTime = now;
                 fetch(`http://127.0.0.1:8000/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`)
                     .catch(e => console.error("Hardware push failed:", e));
@@ -437,7 +206,7 @@
                     lastSendTime = Date.now();
                     fetch(`http://127.0.0.1:8000/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`)
                         .catch(e => console.error("Hardware push failed:", e));
-                }, 50);
+                }, 30);
             }
         }
 
@@ -486,7 +255,6 @@
             }
         }
 
-        // --- DYNAMIC 3D RENDERING ---
         function renderArm(joints) {
             function updateCylinder(cylinder, pointA, pointB) {
                 const dir = new THREE.Vector3().subVectors(pointB, pointA);
@@ -501,7 +269,6 @@
             for (let i = 0; i < joints.length; i++) {
                 let pt = new THREE.Vector3(joints[i][0], joints[i][2], -joints[i][1]); 
 
-                // 1. Manage Pivot Nodes (Now uniformly blue spheres)
                 if (!jointNodes[i]) {
                     let geom = new THREE.SphereGeometry(12, 16, 16);
                     let mat = matNode;
@@ -511,15 +278,14 @@
                 }
                 jointNodes[i].position.copy(pt);
 
-                // 2. Manage Link Cylinders bridging the nodes
                 if (i < joints.length - 1) {
                     let nextPt = new THREE.Vector3(joints[i+1][0], joints[i+1][2], -joints[i+1][1]);
                     
                     if (!linkCylinders[i]) {
                         const cylGeom = new THREE.CylinderGeometry(15, 15, 1, 32);
                         let activeMat = matGray;
-                        if (i === 3) activeMat = matSilver; // The metal forearm
-                        if (i === 5) cylGeom.scale(0.5, 1, 0.5); // Thinner end effector
+                        if (i === 3) activeMat = matSilver; 
+                        if (i === 5) cylGeom.scale(0.5, 1, 0.5); 
                         
                         let mesh = new THREE.Mesh(cylGeom, activeMat);
                         scene.add(mesh);
@@ -559,13 +325,11 @@
 
                 let progress = currentFrame / totalFrames;
                 let easeProgress = progress * progress * (3 - 2 * progress); 
-                let frameAngles = [];
-
+                
                 for (let i = 1; i <= 6; i++) {
                     let currentVal = startAngles[i-1] + (targetAngles[i-1] - startAngles[i-1]) * easeProgress;
                     document.getElementById(`q${i}`).value = currentVal.toFixed(1);
                     document.getElementById(`num${i}`).value = currentVal.toFixed(1);
-                    frameAngles.push(currentVal.toFixed(1));
                 }
 
                 updateRobot(); 
@@ -592,7 +356,7 @@
                 const response = await fetch(`http://127.0.0.1:8000/inverse_kinematics?x=${x}&y=${y}&z=${z}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
                 const data = await response.json();
 
-                if (data.status === "success") {
+                if (data.status === "success" || data.status === "warning") {
                     let frames = data.frames;
                     let currentFrame = 0;
 
@@ -614,11 +378,15 @@
                         pushToHardware(frame.angles);
 
                         currentFrame++;
-                        setTimeout(playNextFrame, 50); 
+                        setTimeout(playNextFrame, 40); 
                     }
                     playNextFrame(); 
+                    
+                    if (data.status === "warning") {
+                        console.warn("Arm reached best effort position (Missed by " + data.error_mm + "mm)");
+                    }
                 } else {
-                    alert("Unreachable coordinate! This position requires a joint to bend past its hardware limits.");
+                    alert("Unreachable coordinate! The arm cannot execute a path to this point.");
                     btnHome.disabled = false;
                     btnMove.disabled = false;
                 }
