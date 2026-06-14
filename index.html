@@ -66,7 +66,7 @@
         <div id="slidersContainer">
             <script>
                 const customLimits = [
-                    { min: -90, max: 65.5 },  
+                    { min: -90, max: 90 },    
                     { min: -60, max: 60 },    
                     { min: -55, max: 19 },    
                     { min: -135, max: 135 },  
@@ -98,7 +98,7 @@
                 <label>Y-Axis <input type="number" id="targetY"></label>
                 <label>Z-Axis <input type="number" id="targetZ"></label>
             </div>
-            <button id="moveBtn" onclick="goToCoordinate()">Execute</button>
+            <button id="moveBtn" onclick="goToCoordinate()">Execute Path</button>
         </div>
     </div>
 
@@ -117,6 +117,7 @@
     </div>
 
     <script>
+        // --- THREE.JS SCENE SETUP ---
         const container = document.getElementById('plot-container');
         const scene = new THREE.Scene();
         scene.background = new THREE.Color('#0b0f19'); 
@@ -155,6 +156,7 @@
         }
         animate();
 
+        // --- MATERIALS & OBJECTS ---
         const matGray = new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.8 }); 
         const matSilver = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 }); 
         const matNode = new THREE.MeshStandardMaterial({ color: 0x0ea5e9 }); 
@@ -162,6 +164,19 @@
         let linkCylinders = [];
         let jointNodes = [];
 
+        // --- TRAJECTORY PATH TRACING SETUP ---
+        const pathPoints = []; // Stores the TCP coordinates
+        const pathMaterial = new THREE.LineBasicMaterial({
+            color: 0xf59e0b, // Distinct orange line
+            linewidth: 3,
+            transparent: true,
+            opacity: 0.85
+        });
+        const pathGeometry = new THREE.BufferGeometry();
+        const pathLine = new THREE.Line(pathGeometry, pathMaterial);
+        scene.add(pathLine);
+
+        // --- USB / SERIAL ---
         async function connectSerial() {
             let port = document.getElementById('comPort').value;
             let statusText = document.getElementById('btText');
@@ -255,6 +270,7 @@
             }
         }
 
+        // --- RENDER ARM & DRAW PATH ---
         function renderArm(joints) {
             function updateCylinder(cylinder, pointA, pointB) {
                 const dir = new THREE.Vector3().subVectors(pointB, pointA);
@@ -295,17 +311,37 @@
                 }
             }
 
+            // --- TRACE THE END EFFECTOR PATH ---
             let endEffector = joints[joints.length - 1];
+            let currentPos = new THREE.Vector3(endEffector[0], endEffector[2], -endEffector[1]);
+            
+            // Add point to line history
+            pathPoints.push(currentPos);
+            
+            // Prevent the line from slowing down the browser over time (keep last 300 points)
+            if (pathPoints.length > 300) {
+                pathPoints.shift();
+            }
+            
+            // Update the visible line in 3D space
+            pathGeometry.setFromPoints(pathPoints);
+
+            // Update UI
             document.getElementById('outX').innerText = endEffector[0].toFixed(2);
             document.getElementById('outY').innerText = endEffector[1].toFixed(2);
             document.getElementById('outZ').innerText = endEffector[2].toFixed(2);
         }
 
+        // --- HOME SEQUENCE ---
         function goHome() {
             const btnHome = document.getElementById('homeBtn');
             const btnMove = document.getElementById('moveBtn');
             btnHome.disabled = true;
             btnMove.disabled = true;
+
+            // Clear the old path before starting the new move
+            pathPoints.length = 0;
+            pathGeometry.setFromPoints(pathPoints);
 
             let startAngles = [];
             for (let i = 1; i <= 6; i++) {
@@ -334,17 +370,22 @@
 
                 updateRobot(); 
                 currentFrame++;
-                setTimeout(animateHome, 30); 
+                setTimeout(animateHome, 33); 
             }
             animateHome(); 
         }
 
+        // --- IK SEQUENCE ---
         async function goToCoordinate() {
             const btnHome = document.getElementById('homeBtn');
             const btnMove = document.getElementById('moveBtn');
             btnHome.disabled = true; 
             btnMove.disabled = true;
             
+            // Clear the old path so you can see the new trajectory clearly
+            pathPoints.length = 0;
+            pathGeometry.setFromPoints(pathPoints);
+
             let cur = [];
             for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
 
@@ -378,7 +419,7 @@
                         pushToHardware(frame.angles);
 
                         currentFrame++;
-                        setTimeout(playNextFrame, 40); 
+                        setTimeout(playNextFrame, 33); 
                     }
                     playNextFrame(); 
                     
