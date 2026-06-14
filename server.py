@@ -13,10 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- MASTERING & HARDWARE CONFIGURATION ---
-HOME_OFFSETS = [69.6, 67.6, -7.6, 54.8, 59.6, 62.8]
-DIRECTIONS = [1, 1, -1, 1, 1, 1]
-
+# Explicitly defining the true physical limits
 BOUNDS = [
     (np.radians(-90), np.radians(65.5)),   
     (np.radians(-60), np.radians(60)),     
@@ -26,19 +23,52 @@ BOUNDS = [
     (np.radians(-90), np.radians(90))      
 ]
 
-# =====================================================================
-# GRAVITY DROOP / MECHANICAL SLOP COMPENSATION
-# If the math locks at -90 degrees but the real arm tilts slightly,
-# adjust this offset. 
-# Example: If it tilts 5 degrees forward, try setting this to 5.0 or -5.0 
-# until the suction cup is perfectly plumb.
-# =====================================================================
-J5_TILT_COMPENSATION_DEG = 0.0  # <--- TUNE THIS NUMBER
+# TILT COMPENSATION: Fine-tune this if the arm still sags slightly under its own weight
+J5_TILT_COMPENSATION_DEG = 0.0  
 
 usb_serial = None
 
 def map_val(x, in_min, in_max, out_min, out_max):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+# ==============================================================================
+# PIECEWISE HARDWARE CALIBRATION MAP
+# This perfectly translates the Virtual 3D Angle to the Real-World PWM Signal
+# anchored exactly to the Home (0 degree) position.
+# ==============================================================================
+def get_calibrated_pwm(joint_idx, angle):
+    # JOINT 1: Base Yaw (Home = 324)
+    if joint_idx == 0:
+        if angle >= 0: return int(map_val(angle, 0.0, 45.0, 324.0, 411.5))
+        else:          return int(map_val(angle, 0.0, -90.0, 324.0, 131.5))
+        
+    # JOINT 2: Shoulder Pitch (Home = 319)
+    elif joint_idx == 1:
+        if angle >= 0: return int(map_val(angle, 0.0, 45.0, 319.0, 381.5))
+        else:          return int(map_val(angle, 0.0, -45.0, 319.0, 256.5))
+        
+    # JOINT 3: Elbow Pitch (Home = 131, Reverse Direction)
+    elif joint_idx == 2:
+        if angle >= 0: return int(map_val(angle, 0.0, 20.0, 131.0, 106.0))
+        else:          return int(map_val(angle, 0.0, -45.0, 131.0, 193.5))
+        
+    # JOINT 4: Wrist Yaw (Home = 287)
+    elif joint_idx == 3:
+        if angle >= 0: return int(map_val(angle, 0.0, 90.0, 287.0, 412.0))
+        else:          return int(map_val(angle, 0.0, -90.0, 287.0, 162.0))
+        
+    # JOINT 5: Wrist Pitch (Home = 299)
+    elif joint_idx == 4:
+        if angle >= 0: return int(map_val(angle, 0.0, 90.0, 299.0, 524.0))
+        else:          return int(map_val(angle, 0.0, -90.0, 299.0, 118.0))
+        
+    # JOINT 6: Suction Roll (Home = 307)
+    elif joint_idx == 5:
+        if angle >= 0: return int(map_val(angle, 0.0, 90.0, 307.0, 532.0))
+        # Corrected overshoot: -90 degrees UI previously gave -100 physical
+        else:          return int(map_val(angle, 0.0, -90.0, 307.0, 104.5))
+        
+    return 300 # Failsafe
 
 @app.get("/connect_serial")
 def connect_serial(port: str):
@@ -58,13 +88,10 @@ def set_hardware(q1: float, q2: float, q3: float, q4: float, q5: float, q6: floa
         virtual_angles = [q1, q2, q3, q4, q5, q6]
         pwms = []
         for i in range(6):
-            # CUSTOM PWM SCALING FOR JOINT 5
-            if i == 4:
-                pwm_val = int(map_val(virtual_angles[4], 0.0, -90.0, 299.0, 118.0))
-            else:
-                physical_angle = (virtual_angles[i] * DIRECTIONS[i]) + HOME_OFFSETS[i]
-                pwm_val = int(150 + (physical_angle * 2.5))
+            # Pass the virtual angle directly into our new exact calibration map
+            pwm_val = get_calibrated_pwm(i, virtual_angles[i])
             
+            # Absolute hardware clamps to prevent stripped gears
             pwm_val = max(80, min(600, pwm_val)) 
             pwms.append(str(pwm_val))
             
