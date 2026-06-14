@@ -15,7 +15,7 @@ app.add_middleware(
 
 # Explicitly defining the true physical limits
 BOUNDS = [
-    (np.radians(-90), np.radians(65.5)),   
+    (np.radians(-90), np.radians(90)),     
     (np.radians(-60), np.radians(60)),     
     (np.radians(-55), np.radians(19)),     
     (np.radians(-135), np.radians(135)),   
@@ -23,7 +23,7 @@ BOUNDS = [
     (np.radians(-90), np.radians(90))      
 ]
 
-# TILT COMPENSATION: Fine-tune this if the arm still sags slightly under its own weight
+# TILT COMPENSATION
 J5_TILT_COMPENSATION_DEG = 0.0  
 
 usb_serial = None
@@ -33,42 +33,27 @@ def map_val(x, in_min, in_max, out_min, out_max):
 
 # ==============================================================================
 # PIECEWISE HARDWARE CALIBRATION MAP
-# This perfectly translates the Virtual 3D Angle to the Real-World PWM Signal
-# anchored exactly to the Home (0 degree) position.
 # ==============================================================================
 def get_calibrated_pwm(joint_idx, angle):
-    # JOINT 1: Base Yaw (Home = 324)
     if joint_idx == 0:
-        if angle >= 0: return int(map_val(angle, 0.0, 45.0, 324.0, 411.5))
+        if angle >= 0: return int(map_val(angle, 0.0, 90.0, 324.0, 499.0)) 
         else:          return int(map_val(angle, 0.0, -90.0, 324.0, 131.5))
-        
-    # JOINT 2: Shoulder Pitch (Home = 319)
     elif joint_idx == 1:
         if angle >= 0: return int(map_val(angle, 0.0, 45.0, 319.0, 381.5))
         else:          return int(map_val(angle, 0.0, -45.0, 319.0, 256.5))
-        
-    # JOINT 3: Elbow Pitch (Home = 131, Reverse Direction)
     elif joint_idx == 2:
         if angle >= 0: return int(map_val(angle, 0.0, 20.0, 131.0, 106.0))
         else:          return int(map_val(angle, 0.0, -45.0, 131.0, 193.5))
-        
-    # JOINT 4: Wrist Yaw (Home = 287)
     elif joint_idx == 3:
         if angle >= 0: return int(map_val(angle, 0.0, 90.0, 287.0, 412.0))
         else:          return int(map_val(angle, 0.0, -90.0, 287.0, 162.0))
-        
-    # JOINT 5: Wrist Pitch (Home = 299)
     elif joint_idx == 4:
         if angle >= 0: return int(map_val(angle, 0.0, 90.0, 299.0, 524.0))
         else:          return int(map_val(angle, 0.0, -90.0, 299.0, 118.0))
-        
-    # JOINT 6: Suction Roll (Home = 307)
     elif joint_idx == 5:
         if angle >= 0: return int(map_val(angle, 0.0, 90.0, 307.0, 532.0))
-        # Corrected overshoot: -90 degrees UI previously gave -100 physical
         else:          return int(map_val(angle, 0.0, -90.0, 307.0, 104.5))
-        
-    return 300 # Failsafe
+    return 300 
 
 @app.get("/connect_serial")
 def connect_serial(port: str):
@@ -88,10 +73,7 @@ def set_hardware(q1: float, q2: float, q3: float, q4: float, q5: float, q6: floa
         virtual_angles = [q1, q2, q3, q4, q5, q6]
         pwms = []
         for i in range(6):
-            # Pass the virtual angle directly into our new exact calibration map
             pwm_val = get_calibrated_pwm(i, virtual_angles[i])
-            
-            # Absolute hardware clamps to prevent stripped gears
             pwm_val = max(80, min(600, pwm_val)) 
             pwms.append(str(pwm_val))
             
@@ -111,7 +93,7 @@ def dh_matrix(a, alpha, d, theta):
 def build_dh_chain(thetas):
     math_thetas = np.copy(thetas)
     math_thetas[1] += (np.pi / 2) 
-    math_thetas[2] -= thetas[1] # Parallel Linkage Fix
+    math_thetas[2] -= thetas[1] 
     
     dh_params = [
         [30,  np.pi/2,  125, math_thetas[0]], [160, 0, 0, math_thetas[1]], [50,  np.pi/2, 0, math_thetas[2]],
@@ -126,21 +108,16 @@ def build_dh_chain(thetas):
         
     return T_current, points
 
-# --- STAGE 1: STRICT POSITIONAL SOLVER ---
 def objective_strict(thetas, target_xyz):
     T, _ = build_dh_chain(thetas)
     pos_error = np.sum((T[:3, 3] - target_xyz)**2)
-    
-    # Penalize J4 and J6 to prevent the wrist from twisting sideways
     twist_penalty = (thetas[3]**2 + thetas[5]**2) * 50000.0
     return pos_error + twist_penalty
 
-# --- THE UNBREAKABLE ALGEBRAIC CONSTRAINT (WITH DROOP COMPENSATION) ---
 def constraint_vertical(thetas):
     target_pitch = np.radians(-90.0 + J5_TILT_COMPENSATION_DEG)
     return (thetas[2] + thetas[4]) - target_pitch
 
-# --- STAGE 2: RELAXED FALLBACK SOLVER ---
 def objective_relaxed(thetas, target_xyz):
     T, _ = build_dh_chain(thetas)
     pos_error = np.sum((T[:3, 3] - target_xyz)**2) * 1000.0
@@ -155,7 +132,7 @@ def get_kinematics(q1: float, q2: float, q3: float, q4: float, q5: float, q6: fl
     _, points = build_dh_chain(np.radians([q1, q2, q3, q4, q5, q6]))
     return {"status": "success", "joints": points}
 
-# --- STANDARD POINT-TO-POINT INVERSE KINEMATICS ---
+# --- DYNAMIC TRAJECTORY INVERSE KINEMATICS ---
 @app.get("/inverse_kinematics")
 def calculate_ik(x: float, y: float, z: float, cur1: float, cur2: float, cur3: float, cur4: float, cur5: float, cur6: float):
     target_xyz = np.array([x, y, z])
@@ -170,15 +147,12 @@ def calculate_ik(x: float, y: float, z: float, cur1: float, cur2: float, cur3: f
 
     best_res_strict = None
     best_err_strict = float('inf')
-    
-    # The dictionary required by SLSQP to enforce our exact vertical math
     con = {'type': 'eq', 'fun': constraint_vertical}
     
     for guess in guesses:
         res = minimize(objective_strict, guess, args=(target_xyz,), method='SLSQP', bounds=BOUNDS, constraints=[con], options={'ftol': 1e-4, 'maxiter': 100})
         T_res, _ = build_dh_chain(res.x)
         true_error = np.linalg.norm(T_res[:3, 3] - target_xyz)
-        
         if true_error < best_err_strict:
             best_err_strict = true_error
             best_res_strict = res
@@ -189,34 +163,41 @@ def calculate_ik(x: float, y: float, z: float, cur1: float, cur2: float, cur3: f
     else:
         best_res_relaxed = None
         best_err_relaxed = float('inf')
-        
         for guess in guesses:
             res = minimize(objective_relaxed, guess, args=(target_xyz,), method='SLSQP', bounds=BOUNDS, options={'ftol': 1e-4, 'maxiter': 100})
             T_res, _ = build_dh_chain(res.x)
             true_error = np.linalg.norm(T_res[:3, 3] - target_xyz)
-            
             if true_error < best_err_relaxed:
                 best_err_relaxed = true_error
                 best_res_relaxed = res
-                
         best_result = best_res_relaxed
         best_error = best_err_relaxed
 
     if best_result is not None and best_error < 25.0:
         target_angles_deg = np.degrees(best_result.x)
         
-        T = 2.0  
-        num_frames = 40 
-        time_steps = np.linspace(0, T, num_frames)
+        # =================================================================
+        # DYNAMIC PATH PLANNING (Velocity & Acceleration Tuning)
+        # =================================================================
+        # Find the maximum degrees any single joint has to travel
+        max_delta = np.max(np.abs(target_angles_deg - np.array(current_angles)))
+        
+        # Max velocity: ~35 degrees per second (safe, smooth speed)
+        # Minimum time: 1.5 seconds (ensures short moves aren't violent)
+        T = max(1.5, max_delta / 35.0)  
+        
+        # Generate 30 frames per second of movement
+        num_frames = int(T * 30)
+        
+        # Normalized time array (tau goes from 0.0 to 1.0)
+        tau = np.linspace(0, 1.0, num_frames)
+        
+        # Quintic S-Curve Profile (Position scaling)
+        s_tau = 10*(tau**3) - 15*(tau**4) + 6*(tau**5)
         
         joint_profiles = []
         for q_start, q_end in zip(current_angles, target_angles_deg):
-            a0 = q_start
-            a3 = 10 * (q_end - q_start) / (T**3)
-            a4 = -15 * (q_end - q_start) / (T**4)
-            a5 = 6 * (q_end - q_start) / (T**5)
-            
-            profile = a0 + a3*(time_steps**3) + a4*(time_steps**4) + a5*(time_steps**5)
+            profile = q_start + (q_end - q_start) * s_tau
             joint_profiles.append(profile)
             
         joint_profiles = np.array(joint_profiles).T  
