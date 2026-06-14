@@ -21,7 +21,7 @@ DIRECTIONS = [1, 1, -1, 1, 1, 1]
 BOUNDS = [
     (np.radians(-90), np.radians(65.5)),   # Joint 1
     (np.radians(-60), np.radians(60)),     # Joint 2
-    (np.radians(-55), np.radians(19)),     # Joint 3 
+    (np.radians(-55), np.radians(19)),     # Joint 3 (Restored to 19 degrees)
     (np.radians(-135), np.radians(135)),   # Joint 4
     (np.radians(-90), np.radians(90)),     # Joint 5
     (np.radians(-90), np.radians(90))      # Joint 6
@@ -49,7 +49,10 @@ def set_hardware(q1: float, q2: float, q3: float, q4: float, q5: float, q6: floa
         for i in range(6):
             physical_angle = (virtual_angles[i] * DIRECTIONS[i]) + HOME_OFFSETS[i]
             pwm_val = int(150 + (physical_angle * 2.5))
-            pwm_val = max(150, min(600, pwm_val)) 
+            
+            # FIXED CLAMP: Lowered minimum bound to 80.
+            # This allows Joint 3 to utilize positive angles (which drop below PWM 131).
+            pwm_val = max(80, min(600, pwm_val)) 
             pwms.append(str(pwm_val))
             
         command = "<" + ",".join(pwms) + ">"
