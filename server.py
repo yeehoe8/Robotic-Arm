@@ -17,13 +17,13 @@ app.add_middleware(
 HOME_OFFSETS = [69.6, 67.6, -7.6, 54.8, 59.6, 62.8]
 DIRECTIONS = [1, 1, -1, 1, 1, 1]
 
-# Explicitly defining the physical limits
+# Explicitly defining the true physical limits
 BOUNDS = [
     (np.radians(-90), np.radians(65.5)),   # Joint 1
     (np.radians(-60), np.radians(60)),     # Joint 2
-    (np.radians(-55), np.radians(19)),     # Joint 3 (Restored to 19 degrees)
+    (np.radians(-55), np.radians(19)),     # Joint 3 
     (np.radians(-135), np.radians(135)),   # Joint 4
-    (np.radians(-90), np.radians(90)),     # Joint 5
+    (np.radians(-90), np.radians(90)),     # Joint 5 
     (np.radians(-90), np.radians(90))      # Joint 6
 ]
 
@@ -43,15 +43,20 @@ def connect_bt(port: str):
 @app.get("/set_hardware")
 def set_hardware(q1: float, q2: float, q3: float, q4: float, q5: float, q6: float):
     global bt_serial
+    
+    # =================================================================
+    # MECHANICAL ZERO TUNING
+    # Adjust this offset (e.g., +15.0 or -10.0) to physically true-up the 
+    # suction cup if the servo horn is mounted misaligned.
+    # =================================================================
+    J5_PHYSICAL_OFFSET_DEG = 17.5 
+    
     if bt_serial and bt_serial.is_open:
-        virtual_angles = [q1, q2, q3, q4, q5, q6]
+        virtual_angles = [q1, q2, q3, q4, q5 + J5_PHYSICAL_OFFSET_DEG, q6]
         pwms = []
         for i in range(6):
             physical_angle = (virtual_angles[i] * DIRECTIONS[i]) + HOME_OFFSETS[i]
             pwm_val = int(150 + (physical_angle * 2.5))
-            
-            # FIXED CLAMP: Lowered minimum bound to 80.
-            # This allows Joint 3 to utilize positive angles (which drop below PWM 131).
             pwm_val = max(80, min(600, pwm_val)) 
             pwms.append(str(pwm_val))
             
@@ -69,9 +74,12 @@ def dh_matrix(a, alpha, d, theta):
         [0,              0,                            0,                           1]
     ])
 
-def get_fk_full(thetas):
+def build_dh_chain(thetas):
     math_thetas = np.copy(thetas)
     math_thetas[1] += (np.pi / 2) 
+    
+    # Parallel Linkage Fix
+    math_thetas[2] -= thetas[1]
     
     dh_params = [
         [30,  np.pi/2,  125, math_thetas[0]],
@@ -83,37 +91,35 @@ def get_fk_full(thetas):
     ]
     
     T_current = np.eye(4)
+    points = [[0.0, 0.0, 0.0]]
     for param in dh_params:
         T_current = T_current @ dh_matrix(*param)
+        points.append([float(T_current[0,3]), float(T_current[1,3]), float(T_current[2,3])])
         
-    return T_current
+    return T_current, points
 
 # STAGE 1: Strict Vertical Priority
 def objective_strict(thetas, target_xyz):
-    T = get_fk_full(thetas)
+    T, _ = build_dh_chain(thetas)
     current_xyz = T[:3, 3]
-    tool_vector = T[:3, 2] 
-    target_vector = np.array([0, 0, -1]) 
     
-    pos_error = np.linalg.norm(current_xyz - target_xyz) * 10.0
-    ori_error = np.linalg.norm(tool_vector - target_vector) * 5000.0
-    twist_penalty = (abs(thetas[3]) + abs(thetas[5])) * 1000.0
+    pos_error = np.sum((current_xyz - target_xyz)**2)
+    
+    # ANALYTICAL VERTICAL LOCK (Coupled to J3 due to parallel linkage)
+    ori_error = abs((thetas[2] + thetas[4]) - (-np.pi/2)) * 100000.0
+    twist_penalty = (abs(thetas[3]) + abs(thetas[5])) * 50000.0
     
     return pos_error + ori_error + twist_penalty
 
-# STAGE 2: Relaxed Position Priority (Allows wrist to tilt)
+# STAGE 2: Relaxed Position Priority
 def objective_relaxed(thetas, target_xyz):
-    T = get_fk_full(thetas)
+    T, _ = build_dh_chain(thetas)
     current_xyz = T[:3, 3]
     tool_vector = T[:3, 2] 
     target_vector = np.array([0, 0, -1]) 
     
-    # Position is absolute king
-    pos_error = np.linalg.norm(current_xyz - target_xyz) * 10000.0
-    
-    # Mild suggestion to point down, but easily overriden by position
+    pos_error = np.sum((current_xyz - target_xyz)**2) * 1000.0
     ori_error = np.linalg.norm(tool_vector - target_vector) * 1.0
-    # Keep wires from tangling
     twist_penalty = (abs(thetas[3]) + abs(thetas[5])) * 10.0
     
     return pos_error + ori_error + twist_penalty
@@ -121,20 +127,7 @@ def objective_relaxed(thetas, target_xyz):
 # --- FORWARD KINEMATICS (Sliders) ---
 @app.get("/kinematics")
 def get_kinematics(q1: float, q2: float, q3: float, q4: float, q5: float, q6: float):
-    thetas = np.radians([q1, q2, q3, q4, q5, q6])
-    thetas[1] += (np.pi / 2)
-    
-    dh_params = [
-        [30,  np.pi/2,  125, thetas[0]], [160, 0, 0, thetas[1]], [50,  np.pi/2, 0, thetas[2]],
-        [0, -np.pi/2, 285, thetas[3]], [0, np.pi/2, 0, thetas[4]], [0, 0, 80, thetas[5]] 
-    ]
-    
-    points = [[0.0, 0.0, 0.0]]
-    T_current = np.eye(4)
-    for param in dh_params:
-        T_current = T_current @ dh_matrix(*param)
-        points.append([float(T_current[0,3]), float(T_current[1,3]), float(T_current[2,3])])
-        
+    _, points = build_dh_chain(np.radians([q1, q2, q3, q4, q5, q6]))
     return {"status": "success", "joints": points}
 
 # --- TWO-STAGE CASCADED INVERSE KINEMATICS ---
@@ -143,41 +136,41 @@ def calculate_ik(x: float, y: float, z: float, cur1: float, cur2: float, cur3: f
     target_xyz = np.array([x, y, z])
     current_angles = [cur1, cur2, cur3, cur4, cur5, cur6]
     
+    # Guesses seeded to heavily favor negative J3, allowing J5 room to compensate
     guesses = [
         np.radians(current_angles),
-        np.radians([0, 45, -20, 0, 65, 0]),  
-        np.radians([0, 60, -40, 0, 70, 0]),  
-        np.radians([0, 10,  10, 0, 70, 0])   
+        np.radians([0, 45, -20, 0, -70, 0]),  
+        np.radians([0, 60, -40, 0, -50, 0]),  
+        np.radians([0, 30, -55, 0, -35, 0])   
     ]
 
-    # --- STAGE 1: Attempt Strict Vertical Solve ---
+    # --- STAGE 1: Strict Vertical Solve ---
     best_res_strict = None
     best_err_strict = float('inf')
     
     for guess in guesses:
         res = minimize(objective_strict, guess, args=(target_xyz,), method='SLSQP', bounds=BOUNDS, options={'ftol': 1e-4, 'maxiter': 100})
-        true_pos = get_fk_full(res.x)[:3, 3]
-        true_error = np.linalg.norm(true_pos - target_xyz)
+        T_res, _ = build_dh_chain(res.x)
+        true_error = np.linalg.norm(T_res[:3, 3] - target_xyz)
         
         if true_error < best_err_strict:
             best_err_strict = true_error
             best_res_strict = res
 
-    # Evaluate Stage 1: Did we hit the coordinate within 10mm?
     if best_err_strict <= 10.0:
         best_result = best_res_strict
         best_error = best_err_strict
         print(f"IK Stage 1 Success: Reached target with VERTICAL LOCK. Missed by {best_error:.1f}mm")
     else:
-        # --- STAGE 2: Fallback to Relaxed Position Solve ---
+        # --- STAGE 2: Relaxed Solve ---
         print(f"IK Stage 1 Failed (Missed by {best_err_strict:.1f}mm). Falling back to Position-Only solve...")
         best_res_relaxed = None
         best_err_relaxed = float('inf')
         
         for guess in guesses:
             res = minimize(objective_relaxed, guess, args=(target_xyz,), method='SLSQP', bounds=BOUNDS, options={'ftol': 1e-4, 'maxiter': 100})
-            true_pos = get_fk_full(res.x)[:3, 3]
-            true_error = np.linalg.norm(true_pos - target_xyz)
+            T_res, _ = build_dh_chain(res.x)
+            true_error = np.linalg.norm(T_res[:3, 3] - target_xyz)
             
             if true_error < best_err_relaxed:
                 best_err_relaxed = true_error
@@ -187,7 +180,7 @@ def calculate_ik(x: float, y: float, z: float, cur1: float, cur2: float, cur3: f
         best_error = best_err_relaxed
         print(f"IK Stage 2 Complete: Reached target IGNORING ORIENTATION. Missed by {best_error:.1f}mm")
 
-    # BEST EFFORT EXECUTION: Allow execution if within 25mm of target
+    # BEST EFFORT EXECUTION
     if best_result is not None and best_error < 25.0:
         target_angles_deg = np.degrees(best_result.x)
         
@@ -209,28 +202,13 @@ def calculate_ik(x: float, y: float, z: float, cur1: float, cur2: float, cur3: f
         
         animation_frames = []
         for frame_angles in joint_profiles:
-            thetas_rad = np.radians(frame_angles)
-            thetas_rad[1] += (np.pi / 2)
-            
-            dh_params = [
-                [30,  np.pi/2,  125, thetas_rad[0]], [160, 0, 0, thetas_rad[1]], [50,  np.pi/2, 0, thetas_rad[2]],
-                [0, -np.pi/2, 285, thetas_rad[3]], [0, np.pi/2, 0, thetas_rad[4]], [0, 0, 80, thetas_rad[5]]
-            ]
-            
-            frame_points = [[0.0, 0.0, 0.0]]
-            T_current = np.eye(4)
-            for param in dh_params:
-                T_current = T_current @ dh_matrix(*param)
-                frame_points.append([float(T_current[0,3]), float(T_current[1,3]), float(T_current[2,3])])
-                
+            _, frame_points = build_dh_chain(np.radians(frame_angles))
             animation_frames.append({
                 "angles": [round(float(a), 2) for a in frame_angles],
                 "joints": frame_points
             })
 
-        # Return "success" so the frontend JS executes the trajectory
         return {"status": "success", "frames": animation_frames, "error_mm": round(best_error, 1)}
-    
     else:
         return {"status": "failed"}
 
