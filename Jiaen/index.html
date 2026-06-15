@@ -338,6 +338,34 @@
             document.getElementById('outY').innerText = ee[1].toFixed(2);
             document.getElementById('outZ').innerText = ee[2].toFixed(2);
         }
+
+    // --- INITIALIZE 3D SCENE ON LOAD ---
+        async function init3DViewer() {
+            try {
+                // Ask the active Python server for the starting Home math
+                let res = await fetch(`http://127.0.0.1:8000/kinematics?q1=0&q2=0&q3=0&q4=0&q5=0&q6=0`);
+                let data = await res.json();
+                if (data.status === "success") {
+                    renderArm(data.joints);
+                }
+            } catch (e) {
+                console.error("Python server offline. Drawing Fallback Ghost Arm.");
+                // Hardcoded ghost arm just in case server.py isn't running yet
+                let fallbackJoints = [
+                    [0.0, 0.0, 0.0],
+                    [0.0, 0.0, 125.0],
+                    [0.0, 0.0, 285.0],
+                    [0.0, 0.0, 335.0],
+                    [0.0, 0.0, 620.0],
+                    [0.0, 0.0, 700.0] 
+                ];
+                renderArm(fallbackJoints);
+            }
+        }
+        
+        // Trigger the draw function the moment the HTML opens
+        init3DViewer();
+    
     </script>
 </body> 
 </html>
