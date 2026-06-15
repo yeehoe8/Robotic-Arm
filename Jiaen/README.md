@@ -1,50 +1,60 @@
-# The Operational Sequence
-## 1. System Boot & Standby
+### ⚙️ The Operational Sequence
 
-The Arduino powers up, instantly locks the arm to the Home [0,0,0,0,0,0] position, ensures the suction motor is OFF, and turns the conveyor belt ON.
+**1. Boot & Idle (Waiting for Object)**
 
-You click "Connect" in the UI. The dashboard links to Python, sets the UI state to WAITING_FOR_OBJ, and begins silently asking the Arduino for updates every 800ms.
+* The Arduino boots up, locks the servos to the Home position `[0,0,0,0,0,0]`, turns the suction OFF, and turns the conveyor ON.
+* You connect via the web UI. The UI state changes to `WAITING_FOR_OBJ`.
+* The Python server quietly pings the Arduino over Bluetooth every 800ms asking, "Do you see anything?"
 
-## 2. The Trigger
+**2. Detection & Hault**
 
-An object travels down the belt and breaks the IR beam.
+* An object breaks the IR beam.
+* The Arduino instantly cuts power to the conveyor relay, freezing the object in place, and transmits `"OBJ_DETECTED"`.
+* The UI receives this, stops polling to free up Bluetooth bandwidth, alerts you, and enables the **"Go to Coordinate & SUCK ON"** button.
 
-The Arduino immediately cuts power to the conveyor belt (halting the object in place) and shouts "OBJ_DETECTED" over Bluetooth.
+**3. The Pick Sequence**
 
-The UI catches this message, stops polling, and unlocks the "Step A" Pick buttons.
+* You click the Pick button.
+* Python calculates a smooth, point-to-point arc to the XYZ coordinate.
+* The arm swings down to the object.
+* The UI sends the `<SUCK_ON>` command. The Arduino triggers the suction relay.
+* The system pauses for 600ms to allow the vacuum pressure to build, ensuring a solid grip.
+* The UI state updates to `HOLDING_OBJ` and unlocks the Place button.
 
-## 3. The Pick (executePick)
+**4. The Place & Reset Sequence**
 
-You click the button. The UI calculates the L-Shape trajectory, sweeping the arm horizontally over the object, then plunging perfectly straight down to the pickZ depth.
+* You click the Place button.
+* The arm sweeps in a smooth arc back to the exact Home position `[0,0,0,0,0,0]` to clear the pickup zone.
+* Python calculates the next arc to the drop-off XYZ coordinate.
+* The arm swings to the drop-off zone.
+* The UI sends `<SUCK_OFF>`. The vacuum cuts out.
+* The system waits 500ms for the object to fall.
+* The arm swings back to Home.
+* Finally, the UI sends `<RESUME>`. The Arduino fires the conveyor belt relay back up, the UI state resets to `WAITING_FOR_OBJ`, and the robot is ready for the next object.
 
-The UI sends <SUCK_ON>. The Arduino fires the suction relay.
+---
 
-The system pauses for 600ms to let the vacuum seal form against the object, then unlocks "Step B".
+### ⚠️ Hardware Traps to Be Aware Of
 
-## 4. The Place (executePlace)
+Because you are moving physical objects in the real world now, kinematics and electronics start to overlap. Watch out for these four things during your physical testing:
 
-The arm swings back to the Home position to clear the pickup zone.
+**1. The "Home Swing" Smash Hazard**
+During the Place sequence, the first thing your code does is `moveArmToHome()`. Because this uses point-to-point joint interpolation, all motors move to `0°` at the exact same time. If your object is sitting inside a shallow box or has tall objects around it, the arm will drag the object in a horizontal arc *through* those obstacles before it gains enough altitude to clear them.
 
-The arm calculates a new L-Shape trajectory to hover over the Place coordinate, then plunges down.
+* *How to fix it later:* If you find the arm knocking things over, you will need to add an intermediate "safe lift" coordinate (e.g., move Z up by 100mm) before executing the `moveArmToHome()` function.
 
-The UI sends <SUCK_OFF>. The Arduino cuts the vacuum. The system waits 500ms for gravity to drop the object.
+**2. Relay Polarity Inversion**
+In your Arduino code, you use `digitalWrite(conveyorPin, HIGH)` to turn the conveyor on, and `LOW` to stop it.
 
-The arm returns to Home. The UI sends <RESUME>, starting the conveyor belt to fetch the next object, and the whole cycle resets.
+* *The Trap:* 90% of cheap DIY relay modules (the ones with the blue or black boxes) are **Active-LOW**. That means sending `LOW` actually turns the motor ON, and `HIGH` turns it OFF. If your conveyor starts running backwards, or your suction motor turns on when it shouldn't, simply swap the `HIGH` and `LOW` commands in your `.ino` file.
 
-# ⚠️ Potential Hardware & Kinematic Issues to Watch
-Everything is coded correctly, but real-world physics might throw a few curveballs at you here.
+**3. IR Sensor Ambient Light Interference**
+IR sensors are highly susceptible to ambient room lighting, especially sunlight or fluorescent overhead tubes.
 
-##  1. The "Home Swing" Smash Hazard
-When your arm finishes the pick, it calls `moveArmToHome()`. That function does not use your L-Shape IK; it just interpolates the raw joint angles to zero. This means the arm will swing in a curved arc to get home. If your object is inside a bin or surrounded by walls, that curved swing might smash the object into the side of the bin before it clears the lip.
+* *The Trap:* If your room lighting changes, the sensor might trigger a false `OBJ_DETECTED` signal. Use the small potentiometer on the back of the IR sensor module to tune the sensitivity directly under the lighting conditions you plan to demo the robot in.
 
-Fix: Ideally, you want to pull straight up (vertically) before moving back to Home.
+**4. Bluetooth Buffer Limits at 9600 Baud**
+You are sending a heavy stream of trajectory frames at 30 frames per second over a 9600 baud Bluetooth connection.
 
-## 2. Relay Polarity Inversion
-You are using `digitalWrite(conveyorPin, HIGH)` to turn the conveyor ON. Keep in mind that 90% of cheap Arduino relay modules are Active-LOW. This means sending HIGH turns the motor off, and sending LOW turns it on. If your conveyor doesn't start, or your vacuum runs backwards, you just need to swap the HIGH and LOW commands in your .ino file.
-
-## 3. Bluetooth Bandwidth Saturation
-You are running the HC-05 at its default 9600 baud rate. During trajectory playback, you are blasting a 26-byte string to the Arduino every 33 milliseconds. That equates to about 780 bytes per second, which is pushing the absolute maximum physical limit of a 9600 baud connection.
-
-Symptom: If the arm starts to jitter or randomly pause during the L-Shape movement, the Bluetooth buffer is choking.
-
-Fix: If this happens, change `setTimeout(playNextFrame, 33)` to 45 in your HTML to slightly slow down the data stream.
+* *The Trap:* The HC-05 module is robust, but 9600 baud has a hard data-rate limit. If you notice the arm briefly stuttering, twitching, or pausing mid-arc, it means the Bluetooth buffer is choking on the data.
+* *The Fix:* If this happens, open your `index.html` and change `setTimeout(playNextFrame, 33)` to `45` or `50`. This slightly slows down the playback speed, giving the Bluetooth module time to digest the data packets.
