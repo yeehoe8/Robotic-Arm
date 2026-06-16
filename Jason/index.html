@@ -3,48 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>6-DOF Robot Control Dashboard</title>
+    <title>6-DOF Mechatronic Arm Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <style>
-        :root { --bg-main: #0b0f19; --bg-panel: #131c31; --bg-card: #1e293b; --border-color: #334155; --text-main: #f8fafc; --text-muted: #94a3b8; --accent-cyan: #0ea5e9; --accent-cyan-hover: #38bdf8; --accent-orange: #f59e0b; --accent-green: #10b981; --danger: #ef4444; }
+        :root { --bg-main: #0b0f19; --bg-panel: #131c31; --bg-card: #1e293b; --border-color: #334155; --text-main: #f8fafc; --text-muted: #94a3b8; --accent-cyan: #0ea5e9; --accent-cyan-hover: #38bdf8; --accent-orange: #f59e0b; --accent-green: #10b981; --accent-purple: #a855f7; --danger: #ef4444; }
         body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; display: flex; background-color: var(--bg-main); color: var(--text-main); height: 100vh; overflow: hidden; }
-        #sidebar { width: 380px; background-color: var(--bg-panel); border-right: 1px solid var(--border-color); padding: 25px; box-shadow: 4px 0 15px rgba(0,0,0,0.3); overflow-y: auto; z-index: 5; display: flex; flex-direction: column; gap: 20px; }
+        #sidebar { width: 420px; background-color: var(--bg-panel); border-right: 1px solid var(--border-color); padding: 25px; box-shadow: 4px 0 15px rgba(0,0,0,0.3); overflow-y: auto; z-index: 5; display: flex; flex-direction: column; gap: 20px; }
         #sidebar::-webkit-scrollbar { width: 8px; } #sidebar::-webkit-scrollbar-track { background: var(--bg-panel); } #sidebar::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
         h2 { font-size: 1.4rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid var(--accent-cyan); padding-bottom: 10px; margin: 0 0 5px 0; color: #fff; }
         h3 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 15px 0; color: var(--text-muted); }
         .slider-group { background: var(--bg-card); padding: 18px; border-radius: 12px; border: 1px solid var(--border-color); transition: border-color 0.3s; }
-        .slider-group:hover { border-color: #475569; }
-        .panel-highlight { border-top: 3px solid var(--accent-cyan); }
         .panel-hardware { border-top: 3px solid var(--accent-green); }
+        .panel-workflow { border-top: 3px solid var(--accent-purple); }
+        .flex-row { display: flex; gap: 10px; align-items: center; }
+        input[type=text], input[type=number] { width: 100%; padding: 10px; background: #0f172a; border: 1px solid var(--border-color); color: #fff; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; text-align: center; }
+        input[type=text]:focus, input[type=number]:focus { outline: 2px solid var(--accent-cyan); border-color: transparent; }
+        .ik-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .ik-inputs label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted); gap: 5px; font-weight: bold; }
+        button { background: linear-gradient(135deg, var(--accent-cyan), #0284c7); color: #fff; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(14, 165, 233, 0.3); }
+        button:active:not(:disabled) { transform: translateY(0); }
+        button:disabled { background: #334155; color: #64748b; cursor: not-allowed; box-shadow: none; transform: none; }
+        
         .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 600; font-size: 0.95rem; }
         input[type=range] { appearance: none; -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #0f172a; border-radius: 3px; border: 1px solid #334155; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-cyan); margin-top: -6px; box-shadow: 0 0 10px rgba(14, 165, 233, 0.5); transition: transform 0.1s; }
         input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); background: #fff; }
-        .flex-row { display: flex; gap: 10px; align-items: center; }
-        input[type=text], input[type=number] { width: 100%; padding: 10px; background: #0f172a; border: 1px solid var(--border-color); color: #fff; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; transition: outline 0.2s; }
-        input[type=text]:focus, input[type=number]:focus { outline: 2px solid var(--accent-cyan); border-color: transparent; }
         .joint-input { width: 65px !important; padding: 4px 8px !important; background: rgba(15, 23, 42, 0.5) !important; color: var(--accent-cyan) !important; border: 1px solid var(--border-color) !important; text-align: right; border-radius: 4px; }
         .joint-input::-webkit-outer-spin-button, .joint-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .ik-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
-        .ik-inputs label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted); gap: 5px; }
-        button { background: linear-gradient(135deg, var(--accent-cyan), #0284c7); color: #fff; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: 700; font-size: 0.9rem; letter-spacing: 0.5px; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-        button:hover { background: linear-gradient(135deg, var(--accent-cyan-hover), var(--accent-cyan)); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(14, 165, 233, 0.3); }
-        button:active { transform: translateY(0); }
-        button:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; box-shadow: none; transform: none; }
-        .btn-home { background: linear-gradient(135deg, var(--accent-orange), #d97706); }
-        .btn-home:hover { background: linear-gradient(135deg, #fbbf24, var(--accent-orange)); box-shadow: 0 6px 12px rgba(245, 158, 11, 0.3); }
+        
+        .status-badge { display: inline-block; padding: 8px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: bold; margin-bottom: 15px; width: 100%; text-align: center; box-sizing: border-box; transition: all 0.3s;}
+        .status-idle { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+        .status-running { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+        .status-detect { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; animation: pulseRed 2s infinite; }
+        .status-working { background: rgba(168, 85, 247, 0.2); color: #a855f7; border: 1px solid #a855f7; }
+        @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+
         .btn-hardware { background: linear-gradient(135deg, var(--accent-green), #059669); }
-        .btn-hardware:hover { background: linear-gradient(135deg, #34d399, var(--accent-green)); box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3); }
+        .btn-home { background: linear-gradient(135deg, var(--accent-orange), #d97706); }
+        .btn-hybrid { background: linear-gradient(135deg, var(--accent-purple), #7e22ce); }
+        .btn-override { background: transparent; border: 1px solid #475569; color: #94a3b8; margin-top: 10px; box-shadow: none;}
+        .btn-override:hover:not(:disabled) { background: #1e293b; color: #fff; border-color: #fff; transform: none; box-shadow: none;}
+        
         #plot-container { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; background-color: var(--bg-main); outline: none; }
-        .data-readout { position: absolute; top: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 20px 25px; border-radius: 12px; border: 1px solid rgba(14, 165, 233, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'JetBrains Mono', monospace; font-size: 1rem; color: var(--text-muted); z-index: 10; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-        .data-readout strong { color: #fff; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; display: block; }
+        .data-readout { position: absolute; top: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 20px 25px; border-radius: 12px; border: 1px solid rgba(14, 165, 233, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'JetBrains Mono', monospace; font-size: 1rem; color: var(--text-muted); z-index: 10; backdrop-filter: blur(12px); }
+        .data-readout strong { color: #fff; font-size: 1.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; display: block; }
         .data-readout span { color: var(--accent-cyan); font-weight: 700; display: inline-block; width: 75px; text-align: right; }
         .coord-line { margin-bottom: 10px; display: flex; justify-content: space-between; width: 160px; }
-        .bt-floating-status { position: absolute; bottom: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 12px 20px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'Inter', sans-serif; font-size: 0.95rem; color: var(--text-main); z-index: 10; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display: flex; align-items: center; gap: 12px; }
+        .bt-floating-status { position: absolute; bottom: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 12px 20px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'Inter', sans-serif; font-size: 0.95rem; display: flex; align-items: center; gap: 12px; }
         .bt-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 8px var(--danger); transition: background 0.3s, box-shadow 0.3s; }
         canvas { display: block; outline: none; }
     </style>
@@ -54,14 +64,16 @@
         <h2>Control Panel</h2>
         
         <div class="slider-group panel-hardware">
-            <h3 style="color: var(--accent-green);">USB Serial Link</h3>
+            <h3 style="color: var(--accent-green);">1. System Link</h3>
             <div class="flex-row">
                 <input type="text" id="comPort" value="COM10" placeholder="COM Port">
-                <button onclick="connectSerial()" class="btn-hardware">Connect</button>
+                <button onclick="connectSerial()" class="btn-hardware" id="connectBtn">Connect</button>
             </div>
+            <!-- SIMULATION UNLOCK BUTTON -->
+            <button onclick="enableSimMode()" style="background: transparent; border: 1px solid var(--accent-purple); color: var(--accent-purple); margin-top: 15px; box-shadow: none;">Test in Simulation Mode</button>
         </div>
-
-        <button id="homeBtn" class="btn-home" onclick="goHome()">Home Position</button>
+        
+        <button id="homeBtn" class="btn-home" onclick="triggerHomeSequence()" disabled>Return to Home Position</button>
         
         <div id="slidersContainer">
             <script>
@@ -76,29 +88,42 @@
                 
                 for (let i = 1; i <= 6; i++) {
                     document.write(`
-                        <div class="slider-group">
-                            <div class="slider-header">
-                                <span style="color: #cbd5e1;">Joint ${i} <span style="color:var(--text-muted); font-size:0.8em;">(&theta;${i})</span></span>
+                        <div class="slider-group" style="padding: 12px 18px;">
+                            <div class="slider-header" style="margin-bottom: 8px;">
+                                <span style="color: #cbd5e1; font-size: 0.85rem;">Joint ${i}</span>
                                 <div style="display: flex; align-items: center; gap: 4px;">
-                                    <input type="number" id="num${i}" class="joint-input" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0.0" onchange="syncFromInput(${i})" onkeyup="if(event.key === 'Enter') syncFromInput(${i})">
+                                    <input type="number" id="num${i}" class="joint-input" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0.0" onchange="syncFromInput(${i})" disabled>
                                     <span style="color:var(--accent-cyan); font-family:'JetBrains Mono', monospace;">&deg;</span>
                                 </div>
                             </div>
-                            <input type="range" id="q${i}" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0" oninput="updateRobot()">
+                            <input type="range" id="q${i}" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0" oninput="updateRobot()" disabled>
                         </div>
                     `);
                 }
             </script>
         </div>
 
-        <div class="slider-group panel-highlight">
-            <h3 style="color: var(--accent-cyan);">Target Coordinate (IK)</h3>
+        <div class="slider-group panel-workflow">
+            <h3 style="color: var(--accent-purple);">2. Autonomous Hybrid Sorting</h3>
+            
+            <div id="sysStatus" class="status-badge status-idle">System Offline</div>
+            
+            <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: bold; display:block; margin-bottom: 8px;">Pick Coordinate (Sensor Trigger)</span>
             <div class="ik-inputs">
-                <label>X-Axis <input type="number" id="targetX"></label>
-                <label>Y-Axis <input type="number" id="targetY"></label>
-                <label>Z-Axis <input type="number" id="targetZ"></label>
+                <label>X <input type="number" id="pickX" value="150" disabled></label>
+                <label>Y <input type="number" id="pickY" value="0" disabled></label>
+                <label>Z <input type="number" id="pickZ" value="-50" disabled></label>
             </div>
-            <button id="moveBtn" onclick="goToCoordinate()">Execute Path</button>
+
+            <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: bold; display:block; margin-bottom: 8px; margin-top: 15px;">Place Coordinate (Drop Zone)</span>
+            <div class="ik-inputs">
+                <label>X <input type="number" id="placeX" value="0" disabled></label>
+                <label>Y <input type="number" id="placeY" value="150" disabled></label>
+                <label>Z <input type="number" id="placeZ" value="-50" disabled></label>
+            </div>
+
+            <button id="workflowBtn" class="btn-hybrid" onclick="executeHybridSequence()" disabled>Execute Pick & Place</button>
+            <button id="overrideBtn" class="btn-override" onclick="forceConveyorOverride()" disabled>Force Conveyor Restart</button>
         </div>
     </div>
 
@@ -108,8 +133,8 @@
             <div class="coord-line">X: <span id="outX">0.00</span> mm</div>
             <div class="coord-line">Y: <span id="outY">0.00</span> mm</div>
             <div class="coord-line">Z: <span id="outZ">0.00</span> mm</div>
+            <div style="font-size: 0.8rem; margin-top: 10px; color: #cbd5e1; border-top: 1px solid var(--border-color); padding-top: 5px;">Engine: <span id="moveMode" style="color: var(--accent-purple); width:auto;">IDLE</span></div>
         </div>
-
         <div class="bt-floating-status">
             <div class="bt-indicator-dot" id="btIndicator"></div>
             <span id="btText" style="font-weight: 600;">Disconnected</span>
@@ -121,27 +146,19 @@
         const container = document.getElementById('plot-container');
         const scene = new THREE.Scene();
         scene.background = new THREE.Color('#0b0f19'); 
-        
-        const gridHelper = new THREE.GridHelper(1200, 24, 0x1e293b, 0x1e293b);
-        scene.add(gridHelper);
-
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(500, 1000, 500);
-        scene.add(directionalLight);
+        scene.add(new THREE.GridHelper(1200, 24, 0x1e293b, 0x1e293b));
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(500, 1000, 500);
+        scene.add(dirLight);
 
         const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 3000);
         camera.position.set(500, 400, 600); 
-        
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(container.clientWidth, container.clientHeight);
         container.appendChild(renderer.domElement);
-
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        controls.target.set(0, 200, 0);
+        controls.enableDamping = true; controls.dampingFactor = 0.05; controls.target.set(0, 200, 0);
 
         window.addEventListener('resize', () => {
             camera.aspect = container.clientWidth / container.clientHeight;
@@ -149,95 +166,138 @@
             renderer.setSize(container.clientWidth, container.clientHeight);
         });
 
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-        }
+        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
         animate();
 
-        // --- MATERIALS & OBJECTS ---
         const matGray = new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.8 }); 
         const matSilver = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 }); 
         const matNode = new THREE.MeshStandardMaterial({ color: 0x0ea5e9 }); 
 
-        let linkCylinders = [];
-        let jointNodes = [];
-
-        // --- TRAJECTORY PATH TRACING SETUP ---
-        const pathPoints = []; // Stores the TCP coordinates
-        const pathMaterial = new THREE.LineBasicMaterial({
-            color: 0xf59e0b, // Distinct orange line
-            linewidth: 3,
-            transparent: true,
-            opacity: 0.85
-        });
+        let linkCylinders = []; let jointNodes = [];
+        const pathPoints = []; 
         const pathGeometry = new THREE.BufferGeometry();
-        const pathLine = new THREE.Line(pathGeometry, pathMaterial);
+        const pathLine = new THREE.Line(pathGeometry, new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 3, transparent: true, opacity: 0.85 }));
         scene.add(pathLine);
+
+        // ==============================================================================
+        // STATE MACHINE LOGIC
+        // ==============================================================================
+        let appState = 'DISCONNECTED'; 
+        let isSimulation = false;
+
+        function enableSimMode() {
+            isSimulation = true;
+            appState = 'READY_TO_PICK';
+            updateUIState();
+            
+            document.getElementById('sysStatus').innerText = 'SIMULATION MODE ACTIVE';
+            document.getElementById('btText').innerText = "Virtual Simulation Link";
+            document.getElementById('btIndicator').style.background = "#a855f7";
+            document.getElementById('btIndicator').style.boxShadow = "0 0 8px #a855f7";
+        }
+
+        function updateUIState() {
+            const statusBadge = document.getElementById('sysStatus');
+            const px = document.getElementById('pickX'); const py = document.getElementById('pickY'); const pz = document.getElementById('pickZ');
+            const dx = document.getElementById('placeX'); const dy = document.getElementById('placeY'); const dz = document.getElementById('placeZ');
+            const btnRun = document.getElementById('workflowBtn');
+            const btnOverride = document.getElementById('overrideBtn');
+            const btnHome = document.getElementById('homeBtn');
+            
+            const manualInputs = [];
+            for(let i=1; i<=6; i++) {
+                manualInputs.push(document.getElementById(`q${i}`));
+                manualInputs.push(document.getElementById(`num${i}`));
+            }
+
+            if (appState === 'DISCONNECTED') {
+                statusBadge.className = 'status-badge status-idle'; statusBadge.innerText = 'System Offline';
+                px.disabled = py.disabled = pz.disabled = true; dx.disabled = dy.disabled = dz.disabled = true;
+                btnRun.disabled = true; btnOverride.disabled = true; btnHome.disabled = true;
+                manualInputs.forEach(el => el.disabled = true);
+            } 
+            else if (appState === 'WAITING_FOR_OBJ') {
+                statusBadge.className = 'status-badge status-running'; statusBadge.innerText = 'Conveyor Running. Waiting for Sensor...';
+                px.disabled = py.disabled = pz.disabled = true; dx.disabled = dy.disabled = dz.disabled = true;
+                btnRun.disabled = true; btnOverride.disabled = false; btnHome.disabled = false;
+                manualInputs.forEach(el => el.disabled = false); 
+            }
+            else if (appState === 'READY_TO_PICK') {
+                statusBadge.className = 'status-badge status-detect'; statusBadge.innerText = isSimulation ? 'SIMULATION MODE ACTIVE' : 'Object Detected! Ready for Pickup.';
+                px.disabled = py.disabled = pz.disabled = false; dx.disabled = dy.disabled = dz.disabled = false;
+                btnRun.disabled = false; btnOverride.disabled = false; btnHome.disabled = false;
+                manualInputs.forEach(el => el.disabled = false);
+            }
+            else if (appState === 'WORKING') {
+                statusBadge.className = 'status-badge status-working'; statusBadge.innerText = 'Executing Trajectory... Do Not Approach';
+                px.disabled = py.disabled = pz.disabled = true; dx.disabled = dy.disabled = dz.disabled = true;
+                btnRun.disabled = true; btnOverride.disabled = true; btnHome.disabled = true;
+                manualInputs.forEach(el => el.disabled = true); 
+            }
+        }
+
+        // --- BACKGROUND POLLING FOR IR SENSOR ---
+        setInterval(async () => {
+            if (appState !== 'WAITING_FOR_OBJ' || isSimulation) return; 
+            try {
+                let res = await fetch('http://127.0.0.1:8000/check_status');
+                let data = await res.json();
+                if(data.status === "success" && data.message === "OBJ_DETECTED") {
+                    appState = 'READY_TO_PICK';
+                    updateUIState();
+                }
+            } catch(e) {}
+        }, 800); 
 
         // --- USB / SERIAL ---
         async function connectSerial() {
             let port = document.getElementById('comPort').value;
             let statusText = document.getElementById('btText');
             let indicator = document.getElementById('btIndicator');
+            let btn = document.getElementById('connectBtn');
             
-            statusText.innerText = "Connecting...";
-            indicator.style.background = "#f59e0b";
-            indicator.style.boxShadow = "0 0 8px #f59e0b";
-
+            isSimulation = false; 
+            btn.innerText = "Connecting..."; statusText.innerText = "Connecting..."; indicator.style.background = "#f59e0b";
             try {
                 const response = await fetch(`http://127.0.0.1:8000/connect_serial?port=${port}`);
                 const data = await response.json();
-
                 if (data.status === "success") {
-                    statusText.innerText = `Connected via USB`;
-                    indicator.style.background = "#10b981"; 
-                    indicator.style.boxShadow = "0 0 8px #10b981";
+                    btn.innerText = "Connected";
+                    statusText.innerText = `Connected`; indicator.style.background = "#10b981"; indicator.style.boxShadow = "0 0 8px #10b981";
+                    appState = 'WAITING_FOR_OBJ';
+                    updateUIState();
                 } else {
-                    statusText.innerText = `Error`;
-                    indicator.style.background = "#ef4444"; 
-                    indicator.style.boxShadow = "0 0 8px #ef4444";
+                    btn.innerText = "Error"; statusText.innerText = `Error`; indicator.style.background = "#ef4444"; indicator.style.boxShadow = "0 0 8px #ef4444";
                 }
-            } catch (error) {
-                statusText.innerText = "Failed";
-                indicator.style.background = "#ef4444";
-                indicator.style.boxShadow = "0 0 8px #ef4444";
-            }
+            } catch (e) { btn.innerText = "Failed"; statusText.innerText = "Failed"; indicator.style.background = "#ef4444"; indicator.style.boxShadow = "0 0 8px #ef4444";}
         }
-
-        let lastSendTime = 0;
-        let pendingHardwareUpdate = null;
 
         function pushToHardware(q) {
-            let now = Date.now();
-            if (now - lastSendTime > 30) {
-                lastSendTime = now;
-                fetch(`http://127.0.0.1:8000/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`)
-                    .catch(e => console.error("Hardware push failed:", e));
-            } else {
-                clearTimeout(pendingHardwareUpdate);
-                pendingHardwareUpdate = setTimeout(() => {
-                    lastSendTime = Date.now();
-                    fetch(`http://127.0.0.1:8000/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`)
-                        .catch(e => console.error("Hardware push failed:", e));
-                }, 30);
+            if (!isSimulation) {
+                fetch(`http://127.0.0.1:8000/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`).catch(e=>{});
+            }
+        }
+        
+        function sendCommand(cmd) {
+            if (!isSimulation) {
+                fetch(`http://127.0.0.1:8000/send_command?cmd=${cmd}`).catch(e=>{});
             }
         }
 
+        function forceConveyorOverride() {
+            sendCommand('RESUME');
+            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ';
+            updateUIState();
+        }
+
+        // --- MANUAL SLIDER UPDATES ---
         function syncFromInput(i) {
             let numInput = document.getElementById(`num${i}`);
             let slider = document.getElementById(`q${i}`);
             let val = parseFloat(numInput.value);
-            
-            let min = parseFloat(numInput.min);
-            let max = parseFloat(numInput.max);
-            if (val < min) val = min;
-            if (val > max) val = max;
-            
-            numInput.value = val.toFixed(1);
-            slider.value = val;
-            
+            let min = parseFloat(numInput.min); let max = parseFloat(numInput.max);
+            if (val < min) val = min; if (val > max) val = max;
+            numInput.value = val.toFixed(1); slider.value = val;
             updateRobot();
         }
 
@@ -250,195 +310,209 @@
                 }
                 q.push(val);
             }
-
             pushToHardware(q); 
-
             try {
                 const response = await fetch(`http://127.0.0.1:8000/kinematics?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`);
                 const data = await response.json();
+                if (data.status === "success") renderArm(data.joints);
+            } catch (error) { console.error("Server connection failed", error); }
+        }
 
-                if (data.status === "success") {
-                    renderArm(data.joints);
+        // --- THE DYNAMIC MOVEMENT ENGINE EXECUTOR ---
+        function executeMovement(endpoint, x, y, z) {
+            return new Promise(async (resolve, reject) => {
+                let cur = [];
+                for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
 
-                    let endEffector = data.joints[data.joints.length - 1];
-                    if (document.activeElement !== document.getElementById('targetX')) document.getElementById('targetX').value = Math.round(endEffector[0]);
-                    if (document.activeElement !== document.getElementById('targetY')) document.getElementById('targetY').value = Math.round(endEffector[1]);
-                    if (document.activeElement !== document.getElementById('targetZ')) document.getElementById('targetZ').value = Math.round(endEffector[2]);
+                try {
+                    const response = await fetch(`http://127.0.0.1:8000/${endpoint}?x=${x}&y=${y}&z=${z}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
+                    const data = await response.json();
+
+                    if (data.status === "success" || data.status === "warning") {
+                        let frames = data.frames;
+                        let currentFrame = 0;
+                        let lastTime = 0;
+
+                        function playNextFrame(timestamp) {
+                            if (currentFrame >= frames.length) { resolve(); return; }
+                            
+                            if (timestamp - lastTime >= 33) {
+                                let frame = frames[currentFrame];
+                                for (let i = 1; i <= 6; i++) {
+                                    document.getElementById(`q${i}`).value = frame.angles[i-1];
+                                    document.getElementById(`num${i}`).value = parseFloat(frame.angles[i-1]).toFixed(1);
+                                }
+                                renderArm(frame.joints);
+                                pushToHardware(frame.angles);
+                                currentFrame++;
+                                lastTime = timestamp;
+                            }
+                            requestAnimationFrame(playNextFrame); 
+                        }
+                        requestAnimationFrame(playNextFrame);
+                    } else { reject(); }
+                } catch (error) { reject(); }
+            });
+        }
+
+        async function triggerHomeSequence() {
+            appState = 'WORKING';
+            updateUIState();
+            await goHome();
+            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ';
+            updateUIState();
+        }
+
+        function goHome() {
+            return new Promise((resolve) => {
+                document.getElementById('moveMode').innerText = "PTP (HOMING)";
+                let startAngles = [];
+                for (let i = 1; i <= 6; i++) startAngles.push(parseFloat(document.getElementById(`q${i}`).value));
+                
+                let targetAngles = [0, 0, 0, 0, 0, 0];
+                let totalFrames = 30; let currentFrame = 0;
+
+                function animateHome() {
+                    if (currentFrame > totalFrames) {
+                        document.getElementById('moveMode').innerText = "IDLE";
+                        resolve(); return; 
+                    }
+                    let progress = currentFrame / totalFrames;
+                    let easeProgress = progress * progress * (3 - 2 * progress); 
+                    let currentAngles = [];
+                    for (let i = 1; i <= 6; i++) {
+                        let val = startAngles[i-1] + (targetAngles[i-1] - startAngles[i-1]) * easeProgress;
+                        
+                        document.getElementById(`q${i}`).value = val;
+                        document.getElementById(`num${i}`).value = val.toFixed(1);
+                        
+                        currentAngles.push(val);
+                    }
+                    pushToHardware(currentAngles);
+                    fetch(`http://127.0.0.1:8000/kinematics?q1=${currentAngles[0]}&q2=${currentAngles[1]}&q3=${currentAngles[2]}&q4=${currentAngles[3]}&q5=${currentAngles[4]}&q6=${currentAngles[5]}`)
+                        .then(r => r.json()).then(d => { if(d.status === "success") renderArm(d.joints); });
+                    
+                    currentFrame++; setTimeout(animateHome, 33); 
                 }
+                animateHome(); 
+            });
+        }
+
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        // ==============================================================================
+        // THE FULL HYBRID INDUSTRIAL WORKFLOW
+        // ==============================================================================
+        async function executeHybridSequence() {
+            appState = 'WORKING';
+            updateUIState();
+            
+            pathPoints.length = 0; pathGeometry.setFromPoints(pathPoints);
+
+            let px = parseFloat(document.getElementById('pickX').value);
+            let py = parseFloat(document.getElementById('pickY').value);
+            let pz = parseFloat(document.getElementById('pickZ').value);
+            let dx = parseFloat(document.getElementById('placeX').value);
+            let dy = parseFloat(document.getElementById('placeY').value);
+            let dz = parseFloat(document.getElementById('placeZ').value);
+
+            let hoverZ = Math.max(pz, dz) + 50.0; 
+
+            try {
+                document.getElementById('moveMode').innerText = "PTP (TRANSFER)";
+                await executeMovement('ik_joint_space', px, py, hoverZ);
+                
+                document.getElementById('moveMode').innerText = "LIN (PLUNGE)";
+                await executeMovement('ik_cartesian', px, py, pz);
+                
+                sendCommand('SUCK_ON');
+                await sleep(600); 
+
+                document.getElementById('moveMode').innerText = "LIN (EXTRACT)";
+                await executeMovement('ik_cartesian', px, py, hoverZ);
+
+                document.getElementById('moveMode').innerText = "PTP (TRANSFER)";
+                await executeMovement('ik_joint_space', dx, dy, hoverZ);
+
+                document.getElementById('moveMode').innerText = "LIN (PLACE)";
+                await executeMovement('ik_cartesian', dx, dy, dz);
+
+                sendCommand('SUCK_OFF');
+                await sleep(500); 
+
+                document.getElementById('moveMode').innerText = "LIN (EXTRACT)";
+                await executeMovement('ik_cartesian', dx, dy, hoverZ);
+                
+                await goHome();
+                sendCommand('RESUME'); 
+                
+                if (isSimulation) {
+                    appState = 'READY_TO_PICK';
+                } else {
+                    appState = 'WAITING_FOR_OBJ';
+                }
+                updateUIState();
+
             } catch (error) {
-                console.error("Server communication failure:", error);
+                alert("Sequence Aborted: Target Coordinate or Hover Coordinate exceeds physical reach constraints.");
+                document.getElementById('moveMode').innerText = "ERROR";
+                
+                appState = isSimulation ? 'READY_TO_PICK' : 'READY_TO_PICK';
+                updateUIState();
             }
         }
 
-        // --- RENDER ARM & DRAW PATH ---
+        // --- RENDER ARM HELPER ---
         function renderArm(joints) {
             function updateCylinder(cylinder, pointA, pointB) {
                 const dir = new THREE.Vector3().subVectors(pointB, pointA);
-                const length = dir.length();
-                if(length === 0) return; 
-                
-                cylinder.scale.set(1, length, 1);
+                if(dir.length() === 0) return; 
+                cylinder.scale.set(1, dir.length(), 1);
                 cylinder.position.copy(pointA).add(dir.clone().multiplyScalar(0.5));
                 cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
             }
 
             for (let i = 0; i < joints.length; i++) {
                 let pt = new THREE.Vector3(joints[i][0], joints[i][2], -joints[i][1]); 
-
                 if (!jointNodes[i]) {
-                    let geom = new THREE.SphereGeometry(12, 16, 16);
-                    let mat = matNode;
-                    let mesh = new THREE.Mesh(geom, mat);
-                    scene.add(mesh);
-                    jointNodes[i] = mesh;
+                    let mesh = new THREE.Mesh(new THREE.SphereGeometry(12, 16, 16), matNode);
+                    scene.add(mesh); jointNodes[i] = mesh;
                 }
                 jointNodes[i].position.copy(pt);
 
                 if (i < joints.length - 1) {
                     let nextPt = new THREE.Vector3(joints[i+1][0], joints[i+1][2], -joints[i+1][1]);
-                    
                     if (!linkCylinders[i]) {
                         const cylGeom = new THREE.CylinderGeometry(15, 15, 1, 32);
-                        let activeMat = matGray;
-                        if (i === 3) activeMat = matSilver; 
                         if (i === 5) cylGeom.scale(0.5, 1, 0.5); 
-                        
-                        let mesh = new THREE.Mesh(cylGeom, activeMat);
-                        scene.add(mesh);
-                        linkCylinders[i] = mesh;
+                        let mesh = new THREE.Mesh(cylGeom, i===3 ? matSilver : matGray);
+                        scene.add(mesh); linkCylinders[i] = mesh;
                     }
                     updateCylinder(linkCylinders[i], pt, nextPt);
                 }
             }
 
-            // --- TRACE THE END EFFECTOR PATH ---
-            let endEffector = joints[joints.length - 1];
-            let currentPos = new THREE.Vector3(endEffector[0], endEffector[2], -endEffector[1]);
-            
-            // Add point to line history
-            pathPoints.push(currentPos);
-            
-            // Prevent the line from slowing down the browser over time (keep last 300 points)
-            if (pathPoints.length > 300) {
-                pathPoints.shift();
-            }
-            
-            // Update the visible line in 3D space
+            let ee = joints[joints.length - 1];
+            pathPoints.push(new THREE.Vector3(ee[0], ee[2], -ee[1]));
+            if (pathPoints.length > 500) pathPoints.shift();
             pathGeometry.setFromPoints(pathPoints);
 
-            // Update UI
-            document.getElementById('outX').innerText = endEffector[0].toFixed(2);
-            document.getElementById('outY').innerText = endEffector[1].toFixed(2);
-            document.getElementById('outZ').innerText = endEffector[2].toFixed(2);
+            document.getElementById('outX').innerText = ee[0].toFixed(2);
+            document.getElementById('outY').innerText = ee[1].toFixed(2);
+            document.getElementById('outZ').innerText = ee[2].toFixed(2);
         }
 
-        // --- HOME SEQUENCE ---
-        function goHome() {
-            const btnHome = document.getElementById('homeBtn');
-            const btnMove = document.getElementById('moveBtn');
-            btnHome.disabled = true;
-            btnMove.disabled = true;
-
-            // Clear the old path before starting the new move
-            pathPoints.length = 0;
-            pathGeometry.setFromPoints(pathPoints);
-
-            let startAngles = [];
-            for (let i = 1; i <= 6; i++) {
-                startAngles.push(parseFloat(document.getElementById(`q${i}`).value));
-            }
-            
-            let targetAngles = [0, 0, 0, 0, 0, 0];
-            let totalFrames = 30; 
-            let currentFrame = 0;
-
-            function animateHome() {
-                if (currentFrame > totalFrames) {
-                    btnHome.disabled = false;
-                    btnMove.disabled = false;
-                    return; 
-                }
-
-                let progress = currentFrame / totalFrames;
-                let easeProgress = progress * progress * (3 - 2 * progress); 
-                
-                for (let i = 1; i <= 6; i++) {
-                    let currentVal = startAngles[i-1] + (targetAngles[i-1] - startAngles[i-1]) * easeProgress;
-                    document.getElementById(`q${i}`).value = currentVal.toFixed(1);
-                    document.getElementById(`num${i}`).value = currentVal.toFixed(1);
-                }
-
-                updateRobot(); 
-                currentFrame++;
-                setTimeout(animateHome, 33); 
-            }
-            animateHome(); 
-        }
-
-        // --- IK SEQUENCE ---
-        async function goToCoordinate() {
-            const btnHome = document.getElementById('homeBtn');
-            const btnMove = document.getElementById('moveBtn');
-            btnHome.disabled = true; 
-            btnMove.disabled = true;
-            
-            // Clear the old path so you can see the new trajectory clearly
-            pathPoints.length = 0;
-            pathGeometry.setFromPoints(pathPoints);
-
-            let cur = [];
-            for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
-
-            let x = document.getElementById('targetX').value;
-            let y = document.getElementById('targetY').value;
-            let z = document.getElementById('targetZ').value;
-
+        async function init3DViewer() {
             try {
-                const response = await fetch(`http://127.0.0.1:8000/inverse_kinematics?x=${x}&y=${y}&z=${z}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
-                const data = await response.json();
-
-                if (data.status === "success" || data.status === "warning") {
-                    let frames = data.frames;
-                    let currentFrame = 0;
-
-                    function playNextFrame() {
-                        if (currentFrame >= frames.length) {
-                            btnHome.disabled = false;
-                            btnMove.disabled = false;
-                            return;
-                        }
-
-                        let frame = frames[currentFrame];
-
-                        for (let i = 1; i <= 6; i++) {
-                            document.getElementById(`q${i}`).value = frame.angles[i-1];
-                            document.getElementById(`num${i}`).value = parseFloat(frame.angles[i-1]).toFixed(1);
-                        }
-
-                        renderArm(frame.joints);
-                        pushToHardware(frame.angles);
-
-                        currentFrame++;
-                        setTimeout(playNextFrame, 33); 
-                    }
-                    playNextFrame(); 
-                    
-                    if (data.status === "warning") {
-                        console.warn("Arm reached best effort position (Missed by " + data.error_mm + "mm)");
-                    }
-                } else {
-                    alert("Unreachable coordinate! The arm cannot execute a path to this point.");
-                    btnHome.disabled = false;
-                    btnMove.disabled = false;
-                }
-            } catch (error) {
-                console.error("IK trajectory engine link failure:", error);
-                btnHome.disabled = false;
-                btnMove.disabled = false;
+                let res = await fetch(`http://127.0.0.1:8000/kinematics?q1=0&q2=0&q3=0&q4=0&q5=0&q6=0`);
+                let data = await res.json();
+                if (data.status === "success") renderArm(data.joints);
+            } catch (e) {
+                renderArm([[0,0,0], [0,0,125], [0,0,285], [0,0,335], [0,0,620], [0,0,700]]);
             }
         }
-
-        updateRobot();
+        init3DViewer();
+        updateUIState(); // Ensure boot state locks sliders properly
     </script>
 </body> 
 </html>
