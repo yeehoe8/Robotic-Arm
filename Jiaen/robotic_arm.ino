@@ -6,7 +6,7 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 SoftwareSerial Bluetooth(2, 7); // RX (Pin 2) to HC-05 TX, TX (Pin 7) to HC-05 RX
 
 // --- HARDWARE PINS ---
-const int irSensorPin = 11;    // IR Sensor OUT pin
+const int irSensorPin = 3;    // IR Sensor OUT pin
 const int conveyorPin = 4;     // Relay control for the conveyor belt
 const int suckMotorPin = 6;    // Relay control for the suction motor
 bool lastIrState = HIGH;       // Assumes IR sensor is Active LOW (triggers on LOW)
