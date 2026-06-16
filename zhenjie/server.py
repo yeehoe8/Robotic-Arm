@@ -97,7 +97,6 @@ def build_dh_chain(thetas):
         
     return T_current, points
 
-# ---> ADD THIS MISSING BLOCK RIGHT HERE <---
 @app.get("/kinematics")
 def get_kinematics(q1: float, q2: float, q3: float, q4: float, q5: float, q6: float):
     _, points = build_dh_chain(np.radians([q1, q2, q3, q4, q5, q6]))
