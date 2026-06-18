@@ -3,53 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>6-DOF Industrial HMI Pendant</title>
+    <title>6-DOF SCADA Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
-        :root { --bg-main: #0b0f19; --bg-panel: #131c31; --bg-card: #1e293b; --border-color: #334155; --text-main: #f8fafc; --text-muted: #94a3b8; --accent-cyan: #0ea5e9; --accent-cyan-hover: #38bdf8; --accent-orange: #f59e0b; --accent-green: #10b981; --danger: #ef4444; }
+        :root { --bg-main: #0b0f19; --bg-panel: #131c31; --bg-card: #1e293b; --border-color: #334155; --text-main: #f8fafc; --text-muted: #94a3b8; --accent-cyan: #0ea5e9; --accent-orange: #f59e0b; --accent-green: #10b981; --accent-purple: #a855f7; --danger: #ef4444; }
         body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; display: flex; background-color: var(--bg-main); color: var(--text-main); height: 100vh; overflow: hidden; }
-        #sidebar { width: 380px; background-color: var(--bg-panel); border-right: 1px solid var(--border-color); padding: 25px; box-shadow: 4px 0 15px rgba(0,0,0,0.3); overflow-y: auto; z-index: 5; display: flex; flex-direction: column; gap: 20px; }
+        
+        /* SIDEBAR */
+        #sidebar { width: 420px; background-color: var(--bg-panel); border-right: 1px solid var(--border-color); padding: 25px; box-shadow: 4px 0 15px rgba(0,0,0,0.3); overflow-y: auto; z-index: 5; display: flex; flex-direction: column; gap: 20px; }
         #sidebar::-webkit-scrollbar { width: 8px; } #sidebar::-webkit-scrollbar-track { background: var(--bg-panel); } #sidebar::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
         h2 { font-size: 1.4rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid var(--accent-cyan); padding-bottom: 10px; margin: 0 0 5px 0; color: #fff; }
-        h3 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 15px 0; color: var(--text-muted); }
+        
+        .tab-switcher { display: flex; background: var(--bg-card); border-radius: 8px; padding: 4px; border: 1px solid var(--border-color); }
+        .tab-btn { flex: 1; text-align: center; padding: 10px; font-weight: 600; font-size: 0.9rem; cursor: pointer; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); transition: all 0.3s; }
+        .tab-btn.active { background: var(--accent-cyan); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .tab-content { display: none; flex-direction: column; gap: 15px; }
+        .tab-content.active { display: flex; }
+
         .slider-group { background: var(--bg-card); padding: 18px; border-radius: 12px; border: 1px solid var(--border-color); transition: border-color 0.3s; }
-        .slider-group:hover { border-color: #475569; }
-        .panel-highlight { border-top: 3px solid var(--accent-cyan); }
         .panel-hardware { border-top: 3px solid var(--accent-green); }
-        .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 600; font-size: 0.95rem; }
-        input[type=range] { appearance: none; -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; }
-        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #0f172a; border-radius: 3px; border: 1px solid #334155; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-cyan); margin-top: -6px; box-shadow: 0 0 10px rgba(14, 165, 233, 0.5); transition: transform 0.1s; }
-        input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); background: #fff; }
         .flex-row { display: flex; gap: 10px; align-items: center; }
-        input[type=text], input[type=number] { width: 100%; padding: 10px; background: #0f172a; border: 1px solid var(--border-color); color: #fff; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; transition: outline 0.2s; }
+        input[type=text], input[type=number] { width: 100%; padding: 10px; background: #0f172a; border: 1px solid var(--border-color); color: #fff; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; text-align: center; }
         input[type=text]:focus, input[type=number]:focus { outline: 2px solid var(--accent-cyan); border-color: transparent; }
+        
+        .ik-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .ik-inputs label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted); gap: 5px; font-weight: bold; }
+        
+        button { background: linear-gradient(135deg, var(--accent-cyan), #0284c7); color: #fff; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(14, 165, 233, 0.3); }
+        button:active:not(:disabled) { transform: translateY(0); }
+        button:disabled { background: #334155; color: #64748b; cursor: not-allowed; box-shadow: none; transform: none; }
+        
+        .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 600; font-size: 0.95rem; }
+        input[type=range] { appearance: none; width: 100%; background: transparent; cursor: pointer; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #0f172a; border-radius: 3px; border: 1px solid #334155; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-cyan); margin-top: -6px; box-shadow: 0 0 10px rgba(14, 165, 233, 0.5); }
         .joint-input { width: 65px !important; padding: 4px 8px !important; background: rgba(15, 23, 42, 0.5) !important; color: var(--accent-cyan) !important; border: 1px solid var(--border-color) !important; text-align: right; border-radius: 4px; }
-        .joint-input::-webkit-outer-spin-button, .joint-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .ik-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
-        .ik-inputs label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted); gap: 5px; }
-        button { background: linear-gradient(135deg, var(--accent-cyan), #0284c7); color: #fff; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: 700; font-size: 0.9rem; letter-spacing: 0.5px; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-        button:hover { background: linear-gradient(135deg, var(--accent-cyan-hover), var(--accent-cyan)); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(14, 165, 233, 0.3); }
-        button:active { transform: translateY(0); }
-        button:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; box-shadow: none; transform: none; }
-        .btn-home { background: linear-gradient(135deg, var(--accent-orange), #d97706); }
-        .btn-home:hover { background: linear-gradient(135deg, #fbbf24, var(--accent-orange)); box-shadow: 0 6px 12px rgba(245, 158, 11, 0.3); }
+        
+        .status-badge { display: inline-block; padding: 8px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: bold; margin-bottom: 15px; width: 100%; text-align: center; box-sizing: border-box; transition: all 0.3s;}
+        .status-idle { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+        .status-running { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+        .status-detect { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; animation: pulseRed 2s infinite; }
+        .status-working { background: rgba(168, 85, 247, 0.2); color: #a855f7; border: 1px solid #a855f7; }
+        @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+
         .btn-hardware { background: linear-gradient(135deg, var(--accent-green), #059669); }
-        .btn-hardware:hover { background: linear-gradient(135deg, #34d399, var(--accent-green)); box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3); }
-        #plot-container { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; background-color: var(--bg-main); outline: none; }
-        .data-readout { position: absolute; top: 25px; right: 25px; background: rgba(15, 23, 42, 0.75); padding: 20px 25px; border-radius: 12px; border: 1px solid rgba(14, 165, 233, 0.3); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: var(--text-muted); z-index: 10; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); width: 220px; }
-        .data-readout strong { color: #fff; font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px; display: block; }
-        .data-readout span { color: var(--accent-cyan); font-weight: 700; float: right; text-align: right; }
-        .coord-line { margin-bottom: 8px; clear: both; }
-        .telemetry-divider { height: 1px; background: var(--border-color); margin: 15px 0; }
-        .telemetry-status { color: var(--accent-green) !important; }
-        .telemetry-warning { color: var(--accent-orange) !important; }
-        .bt-floating-status { position: absolute; bottom: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 12px 20px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'Inter', sans-serif; font-size: 0.95rem; color: var(--text-main); z-index: 10; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display: flex; align-items: center; gap: 12px; }
-        .bt-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 8px var(--danger); transition: background 0.3s, box-shadow 0.3s; }
+        .btn-home { background: linear-gradient(135deg, var(--accent-orange), #d97706); }
+        .btn-hybrid { background: linear-gradient(135deg, var(--accent-purple), #7e22ce); }
+        .btn-override { background: transparent; border: 1px solid #475569; color: #94a3b8; margin-top: 10px; box-shadow: none;}
+        .btn-override:hover:not(:disabled) { background: #1e293b; color: #fff; border-color: #fff; }
+        
+        /* MAIN CONTENT */
+        #main-content { flex-grow: 1; position: relative; background-color: var(--bg-main); overflow: hidden; display: flex; flex-direction: column; }
+        #view-toggles { position: absolute; top: 25px; left: 25px; display: flex; background: rgba(15, 23, 42, 0.8); border-radius: 8px; border: 1px solid var(--border-color); z-index: 20; backdrop-filter: blur(5px); padding: 4px; }
+        .view-btn { background: transparent; color: var(--text-muted); border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.3s; box-shadow: none; width: auto; }
+        .view-btn.active { background: var(--accent-cyan); color: #fff; }
+        .view-btn:hover:not(.active) { background: #1e293b; transform: none; box-shadow: none; }
+
+        #plot-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+        
+        #telemetry-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; display: none; flex-direction: column; gap: 20px; padding: 80px 30px 30px 30px; box-sizing: border-box; overflow-y: auto; background: var(--bg-main); z-index: 10; }
+        .chart-card { background: var(--bg-card); border-radius: 12px; padding: 15px; border: 1px solid var(--border-color); height: 250px; position: relative; flex-shrink: 0; }
+        .chart-card h3 { margin: 0 0 10px 0; color: #fff; font-size: 1rem; }
+
+        .data-readout { position: absolute; top: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 20px 25px; border-radius: 12px; border: 1px solid rgba(14, 165, 233, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'JetBrains Mono', monospace; font-size: 1rem; color: var(--text-muted); z-index: 20; backdrop-filter: blur(12px); }
+        .data-readout strong { color: #fff; font-size: 1.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; display: block; }
+        .data-readout span { color: var(--accent-cyan); font-weight: 700; display: inline-block; width: 75px; text-align: right; }
+        .coord-line { margin-bottom: 10px; display: flex; justify-content: space-between; width: 160px; }
+        
+        .bt-floating-status { position: absolute; bottom: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 12px 20px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2); font-family: 'Inter', sans-serif; font-size: 0.95rem; display: flex; align-items: center; gap: 12px; z-index: 20;}
+        .bt-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 8px var(--danger); transition: 0.3s; }
         canvas { display: block; outline: none; }
+
+        @media (max-width: 800px) {
+            body { flex-direction: column-reverse; overflow-y: auto; }
+            #sidebar { width: 100%; height: auto; border-right: none; border-top: 1px solid var(--border-color); padding: 15px; box-sizing: border-box; }
+            #plot-container { height: 50vh; width: 100%; flex-shrink: 0; }
+            .data-readout { top: 10px; right: 10px; padding: 10px; font-size: 0.8rem; }
+            .data-readout strong { font-size: 0.9rem; margin-bottom: 5px; padding-bottom: 5px; }
+            .bt-floating-status { bottom: 10px; right: 10px; padding: 8px 15px; font-size: 0.8rem; }
+        }
     </style>
 </head>
 <body>
@@ -57,101 +94,260 @@
         <h2>Control Panel</h2>
         
         <div class="slider-group panel-hardware">
-            <h3 style="color: var(--accent-green);">12-Bit Hardware Link</h3>
+            <h3 style="color: var(--accent-green);">System Link</h3>
             <div class="flex-row">
-                <input type="text" id="comPort" value="COM8" placeholder="COM Port">
-                <button onclick="connectSerial()" class="btn-hardware">Connect</button>
+                <input type="text" id="comPort" value="COM10" placeholder="COM Port">
+                <button onclick="connectSerial()" class="btn-hardware" id="connectBtn">Connect</button>
             </div>
+            <button onclick="toggleSimMode()" id="simToggleBtn" style="background: transparent; border: 1px solid var(--accent-purple); color: var(--accent-purple); margin-top: 15px; box-shadow: none;">Enable Simulation Mode</button>
         </div>
 
-        <button id="homeBtn" class="btn-home" onclick="goHome()">Home Position</button>
-        
-        <div id="slidersContainer">
-            <script>
-                const customLimits = [
-                    { min: -90, max: 90 },    
-                    { min: -60, max: 60 },    
-                    { min: -55, max: 19 },    
-                    { min: -135, max: 135 },  
-                    { min: -90, max: 90 },    
-                    { min: -90, max: 90 }     
-                ];
-                
-                for (let i = 1; i <= 6; i++) {
-                    document.write(`
-                        <div class="slider-group">
-                            <div class="slider-header">
-                                <span style="color: #cbd5e1;">Joint ${i} <span style="color:var(--text-muted); font-size:0.8em;">(&theta;${i})</span></span>
-                                <div style="display: flex; align-items: center; gap: 4px;">
-                                    <input type="number" id="num${i}" class="joint-input" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0.0" onchange="syncFromInput(${i})" onkeyup="if(event.key === 'Enter') syncFromInput(${i})">
-                                    <span style="color:var(--accent-cyan); font-family:'JetBrains Mono', monospace;">&deg;</span>
+        <div class="tab-switcher">
+            <button class="tab-btn active" id="btnTabManual" onclick="switchSidebarTab('manual')">Manual Control</button>
+            <button class="tab-btn" id="btnTabAuto" onclick="switchSidebarTab('auto')">Auto Workflow</button>
+        </div>
+
+        <div id="tab-manual" class="tab-content active">
+            <div class="slider-group" style="border-top: 3px solid var(--accent-cyan);">
+                <h3 style="color: var(--accent-cyan); margin-bottom: 15px;">Target Coordinate</h3>
+                <div class="ik-inputs">
+                    <label>X <input type="number" id="manX" value="150" disabled></label>
+                    <label>Y <input type="number" id="manY" value="150" disabled></label>
+                    <label>Z <input type="number" id="manZ" value="50" disabled></label>
+                </div>
+                <button id="manualMoveBtn" onclick="executeManualMovement()" disabled>Execute</button>
+            </div>
+
+            <button id="homeBtn" class="btn-home" onclick="triggerHomeSequence()" disabled>Return to Home Position</button>
+            
+            <div id="slidersContainer">
+                <script>
+                    const customLimits = [
+                        { min: -90, max: 90 }, { min: -60, max: 60 }, { min: -55, max: 19 },    
+                        { min: -135, max: 135 }, { min: -90, max: 90 }, { min: -90, max: 90 }     
+                    ];
+                    for (let i = 1; i <= 6; i++) {
+                        document.write(`
+                            <div class="slider-group" style="padding: 12px 18px; margin-bottom:10px;">
+                                <div class="slider-header" style="margin-bottom: 8px;">
+                                    <span style="color: #cbd5e1; font-size: 0.85rem;">Joint ${i}</span>
+                                    <div style="display: flex; align-items: center; gap: 4px;">
+                                        <input type="number" id="num${i}" class="joint-input" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0.0" onchange="syncFromInput(${i})" disabled>
+                                        <span style="color:var(--accent-cyan); font-family:'JetBrains Mono', monospace;">&deg;</span>
+                                    </div>
                                 </div>
+                                <input type="range" id="q${i}" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0" oninput="updateRobot()" disabled>
                             </div>
-                            <input type="range" id="q${i}" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0" oninput="updateRobot()">
-                        </div>
-                    `);
-                }
-            </script>
+                        `);
+                    }
+                </script>
+            </div>
         </div>
 
-        <div class="slider-group panel-highlight">
-            <h3 style="color: var(--accent-cyan);">Target Coordinate (IK)</h3>
-            <div class="ik-inputs">
-                <label>X-Axis <input type="number" id="targetX"></label>
-                <label>Y-Axis <input type="number" id="targetY"></label>
-                <label>Z-Axis <input type="number" id="targetZ"></label>
+        <div id="tab-auto" class="tab-content">
+            <div class="slider-group panel-workflow">
+                <h3 style="color: var(--accent-purple);">Auto Pick-and-Place</h3>
+                
+                <div id="sysStatus" class="status-badge status-idle">System Offline</div>
+                
+                <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: bold; display:block; margin-bottom: 8px;">Pick Coordinate (Sensor Trigger)</span>
+                <div class="ik-inputs">
+                    <label>X <input type="number" id="pickX" value="150" disabled></label>
+                    <label>Y <input type="number" id="pickY" value="0" disabled></label>
+                    <label>Z <input type="number" id="pickZ" value="-50" disabled></label>
+                </div>
+
+                <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: bold; display:block; margin-bottom: 8px; margin-top: 15px;">Place Coordinate (Drop Zone)</span>
+                <div class="ik-inputs">
+                    <label>X <input type="number" id="placeX" value="0" disabled></label>
+                    <label>Y <input type="number" id="placeY" value="150" disabled></label>
+                    <label>Z <input type="number" id="placeZ" value="-50" disabled></label>
+                </div>
+
+                <button id="workflowBtn" class="btn-hybrid" onclick="executeHybridSequence()" disabled style="margin-top: 15px;">Execute Auto Workflow</button>
+                <button id="overrideBtn" class="btn-override" onclick="forceConveyorOverride()" disabled>Force Conveyor Restart</button>
             </div>
-            <button id="moveBtn" onclick="goToCoordinate()">Execute Path</button>
         </div>
     </div>
 
-    <div id="plot-container">
-        <div class="data-readout">
+    <!-- MAIN VIEW AREA -->
+    <div id="main-content">
+        <div id="view-toggles">
+            <button class="view-btn active" id="btnView3D" onclick="switchMainView('3d')">3D Digital Twin</button>
+            <button class="view-btn" id="btnViewTel" onclick="switchMainView('telemetry')">Live Telemetry</button>
+        </div>
+
+        <div class="data-readout" id="tcpReadout">
             <strong>TCP Real-time</strong>
-            <div class="coord-line">X-Axis: <span id="outX">0.00</span></div>
-            <div class="coord-line">Y-Axis: <span id="outY">0.00</span></div>
-            <div class="coord-line">Z-Axis: <span id="outZ">0.00</span></div>
-            
-            <div class="telemetry-divider"></div>
-            
-            <strong>Solver Diagnostics</strong>
-            <div class="coord-line">Math Engine: <span style="color: #cbd5e1;">Jacobian DLS</span></div>
-            <div class="coord-line">Phase Mode: <span id="telemetryMode" style="color: #cbd5e1;">Standby</span></div>
-            <div class="coord-line">Calc Error: <span id="telemetryError" class="telemetry-status">0.00 mm</span></div>
+            <div class="coord-line">X: <span id="outX">0.00</span> mm</div>
+            <div class="coord-line">Y: <span id="outY">0.00</span> mm</div>
+            <div class="coord-line">Z: <span id="outZ">0.00</span> mm</div>
+            <div style="font-size: 0.8rem; margin-top: 10px; color: #cbd5e1; border-top: 1px solid var(--border-color); padding-top: 5px;">Engine: <span id="moveMode" style="color: var(--accent-purple); width:auto;">IDLE</span></div>
         </div>
 
         <div class="bt-floating-status">
             <div class="bt-indicator-dot" id="btIndicator"></div>
             <span id="btText" style="font-weight: 600;">Disconnected</span>
         </div>
+
+        <div id="plot-container"></div>
+
+        <div id="telemetry-container">
+            <div class="chart-card">
+                <h3>End-Effector Position (mm)</h3>
+                <canvas id="posChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>End-Effector Velocity (mm/s)</h3>
+                <canvas id="velChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>End-Effector Acceleration (mm/s²)</h3>
+                <canvas id="accChart"></canvas>
+            </div>
+        </div>
     </div>
 
     <script>
-        // --- THREE.JS SCENE SETUP ---
+        // ==============================================================================
+        // UI SWITCHING LOGIC
+        // ==============================================================================
+        function switchSidebarTab(tab) {
+            document.getElementById('btnTabManual').classList.remove('active');
+            document.getElementById('btnTabAuto').classList.remove('active');
+            document.getElementById('tab-manual').classList.remove('active');
+            document.getElementById('tab-auto').classList.remove('active');
+
+            if(tab === 'manual') {
+                document.getElementById('btnTabManual').classList.add('active');
+                document.getElementById('tab-manual').classList.add('active');
+            } else {
+                document.getElementById('btnTabAuto').classList.add('active');
+                document.getElementById('tab-auto').classList.add('active');
+            }
+        }
+
+        let currentView = '3d';
+        function switchMainView(view) {
+            document.getElementById('btnView3D').classList.remove('active');
+            document.getElementById('btnViewTel').classList.remove('active');
+            
+            if(view === '3d') {
+                document.getElementById('btnView3D').classList.add('active');
+                document.getElementById('plot-container').style.display = 'block';
+                document.getElementById('telemetry-container').style.display = 'none';
+                document.getElementById('tcpReadout').style.display = 'block';
+                currentView = '3d';
+            } else {
+                document.getElementById('btnViewTel').classList.add('active');
+                document.getElementById('plot-container').style.display = 'none';
+                document.getElementById('telemetry-container').style.display = 'flex';
+                document.getElementById('tcpReadout').style.display = 'none';
+                currentView = 'telemetry';
+            }
+        }
+
+        // ==============================================================================
+        // HIGH-SPEED TELEMETRY GRAPHING (CHART.JS)
+        // ==============================================================================
+        const MAX_DATA_POINTS = 100;
+        const emptyLabels = Array(MAX_DATA_POINTS).fill('');
+        
+        const chartOptions = {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            elements: { point: { radius: 0 }, line: { tension: 0.4, borderWidth: 2 } },
+            scales: {
+                x: { display: false },
+                y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: {family: 'JetBrains Mono'} } }
+            },
+            plugins: { legend: { labels: { color: '#fff', font: {family: 'Inter', size: 11} } } }
+        };
+
+        const createChart = (ctxId, title, yLabel) => {
+            return new Chart(document.getElementById(ctxId).getContext('2d'), {
+                type: 'line',
+                data: { labels: emptyLabels, datasets: [
+                    { label: 'X Axis', borderColor: '#ef4444', data: Array(MAX_DATA_POINTS).fill(0) },
+                    { label: 'Y Axis', borderColor: '#10b981', data: Array(MAX_DATA_POINTS).fill(0) },
+                    { label: 'Z Axis', borderColor: '#0ea5e9', data: Array(MAX_DATA_POINTS).fill(0) }
+                ]},
+                options: chartOptions
+            });
+        };
+
+        const posChart = createChart('posChart');
+        const velChart = createChart('velChart');
+        const accChart = createChart('accChart');
+
+        let lastChartTime = performance.now();
+        let lastPos = {x: 0, y: 0, z: 0};
+        let lastVel = {x: 0, y: 0, z: 0};
+        let smoothedVel = {x: 0, y: 0, z: 0};
+        let smoothedAcc = {x: 0, y: 0, z: 0};
+
+        function pushTelemetryData(ee) {
+            let now = performance.now();
+            let dt = (now - lastChartTime) / 1000.0;
+            if (dt < 0.015) return; 
+            if (dt > 0.1) dt = 0.033; 
+            lastChartTime = now;
+
+            let curPos = { x: ee[0], y: ee[1], z: ee[2] };
+
+            let rawVx = (curPos.x - lastPos.x) / dt;
+            let rawVy = (curPos.y - lastPos.y) / dt;
+            let rawVz = (curPos.z - lastPos.z) / dt;
+
+            const alphaV = 0.25; 
+            smoothedVel.x = (alphaV * rawVx) + ((1 - alphaV) * smoothedVel.x);
+            smoothedVel.y = (alphaV * rawVy) + ((1 - alphaV) * smoothedVel.y);
+            smoothedVel.z = (alphaV * rawVz) + ((1 - alphaV) * smoothedVel.z);
+
+            let rawAx = (smoothedVel.x - lastVel.x) / dt;
+            let rawAy = (smoothedVel.y - lastVel.y) / dt;
+            let rawAz = (smoothedVel.z - lastVel.z) / dt;
+
+            const alphaA = 0.15;
+            smoothedAcc.x = (alphaA * rawAx) + ((1 - alphaA) * smoothedAcc.x);
+            smoothedAcc.y = (alphaA * rawAy) + ((1 - alphaA) * smoothedAcc.y);
+            smoothedAcc.z = (alphaA * rawAz) + ((1 - alphaA) * smoothedAcc.z);
+
+            const updateDataset = (chart, newData) => {
+                chart.data.datasets[0].data.shift(); chart.data.datasets[0].data.push(newData.x);
+                chart.data.datasets[1].data.shift(); chart.data.datasets[1].data.push(newData.y);
+                chart.data.datasets[2].data.shift(); chart.data.datasets[2].data.push(newData.z);
+            };
+
+            updateDataset(posChart, curPos);
+            updateDataset(velChart, smoothedVel);
+            updateDataset(accChart, smoothedAcc);
+
+            if (currentView === 'telemetry') {
+                posChart.update(); velChart.update(); accChart.update();
+            }
+
+            lastPos = curPos;
+            lastVel = {...smoothedVel};
+        }
+
+        // ==============================================================================
+        // THREE.JS SCENE SETUP
+        // ==============================================================================
         const container = document.getElementById('plot-container');
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color('#0b0f19'); 
-        
-        const gridHelper = new THREE.GridHelper(1200, 24, 0x1e293b, 0x1e293b);
-        scene.add(gridHelper);
-
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(500, 1000, 500);
-        scene.add(directionalLight);
+        scene.add(new THREE.GridHelper(1200, 24, 0x1e293b, 0x1e293b));
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(500, 1000, 500);
+        scene.add(dirLight);
 
         const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 3000);
         camera.position.set(500, 400, 600); 
-        
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(container.clientWidth, container.clientHeight);
         container.appendChild(renderer.domElement);
-
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        controls.target.set(0, 200, 0);
+        controls.enableDamping = true; controls.dampingFactor = 0.05; controls.target.set(0, 200, 0);
 
         window.addEventListener('resize', () => {
             camera.aspect = container.clientWidth / container.clientHeight;
@@ -159,96 +355,184 @@
             renderer.setSize(container.clientWidth, container.clientHeight);
         });
 
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-        }
+        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
         animate();
 
-        // --- MATERIALS & OBJECTS ---
         const matGray = new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.8 }); 
         const matSilver = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 }); 
         const matNode = new THREE.MeshStandardMaterial({ color: 0x0ea5e9 }); 
 
-        let linkCylinders = [];
-        let jointNodes = [];
-
-        // --- TRAJECTORY PATH TRACING SETUP ---
+        let linkCylinders = []; let jointNodes = [];
         const pathPoints = []; 
-        const pathMaterial = new THREE.LineBasicMaterial({
-            color: 0xf59e0b, 
-            linewidth: 3,
-            transparent: true,
-            opacity: 0.85
-        });
         const pathGeometry = new THREE.BufferGeometry();
-        const pathLine = new THREE.Line(pathGeometry, pathMaterial);
+        const pathLine = new THREE.Line(pathGeometry, new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 3, transparent: true, opacity: 0.85 }));
         scene.add(pathLine);
 
-        // --- USB / SERIAL ---
+        function renderArm(joints) {
+            function updateCylinder(cylinder, pointA, pointB) {
+                const dir = new THREE.Vector3().subVectors(pointB, pointA);
+                if(dir.length() === 0) return; 
+                cylinder.scale.set(1, dir.length(), 1);
+                cylinder.position.copy(pointA).add(dir.clone().multiplyScalar(0.5));
+                cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+            }
+
+            for (let i = 0; i < joints.length; i++) {
+                let pt = new THREE.Vector3(joints[i][0], joints[i][2], -joints[i][1]); 
+                if (!jointNodes[i]) {
+                    let mesh = new THREE.Mesh(new THREE.SphereGeometry(12, 16, 16), matNode);
+                    scene.add(mesh); jointNodes[i] = mesh;
+                }
+                jointNodes[i].position.copy(pt);
+
+                if (i < joints.length - 1) {
+                    let nextPt = new THREE.Vector3(joints[i+1][0], joints[i+1][2], -joints[i+1][1]);
+                    if (!linkCylinders[i]) {
+                        const cylGeom = new THREE.CylinderGeometry(15, 15, 1, 32);
+                        if (i === 5) cylGeom.scale(0.5, 1, 0.5); 
+                        let mesh = new THREE.Mesh(cylGeom, i===3 ? matSilver : matGray);
+                        scene.add(mesh); linkCylinders[i] = mesh;
+                    }
+                    updateCylinder(linkCylinders[i], pt, nextPt);
+                }
+            }
+
+            let ee = joints[joints.length - 1];
+            pushTelemetryData(ee);
+
+            pathPoints.push(new THREE.Vector3(ee[0], ee[2], -ee[1]));
+            if (pathPoints.length > 500) pathPoints.shift();
+            pathGeometry.setFromPoints(pathPoints);
+
+            document.getElementById('outX').innerText = ee[0].toFixed(2);
+            document.getElementById('outY').innerText = ee[1].toFixed(2);
+            document.getElementById('outZ').innerText = ee[2].toFixed(2);
+        }
+
+        // ==============================================================================
+        // STATE MACHINE LOGIC
+        // ==============================================================================
+        let appState = 'DISCONNECTED'; 
+        let isSimulation = false;
+
+        function toggleSimMode() {
+            let btn = document.getElementById('simToggleBtn');
+            if (!isSimulation) {
+                isSimulation = true; 
+                appState = 'READY_TO_PICK'; 
+                updateUIState();
+                document.getElementById('sysStatus').innerText = 'Manual Simulation Active';
+                document.getElementById('btText').innerText = "Manual Simulation Mode";
+                document.getElementById('btIndicator').style.background = "#a855f7";
+                document.getElementById('btIndicator').style.boxShadow = "0 0 8px #a855f7";
+                btn.innerText = "Cancel Simulation Mode";
+                btn.style.borderColor = "var(--danger)";
+                btn.style.color = "var(--danger)";
+            } else {
+                isSimulation = false; 
+                appState = 'DISCONNECTED'; 
+                updateUIState();
+                document.getElementById('btText').innerText = "Disconnected";
+                document.getElementById('btIndicator').style.background = "var(--danger)";
+                document.getElementById('btIndicator').style.boxShadow = "0 0 8px var(--danger)";
+                btn.innerText = "Enable Simulation Mode";
+                btn.style.borderColor = "var(--accent-purple)";
+                btn.style.color = "var(--accent-purple)";
+                document.getElementById('connectBtn').innerText = "Connect";
+            }
+        }
+
+        function updateUIState() {
+            const statusBadge = document.getElementById('sysStatus');
+            const elementsToToggle = [
+                'pickX', 'pickY', 'pickZ', 'placeX', 'placeY', 'placeZ', 'manX', 'manY', 'manZ',
+                'workflowBtn', 'overrideBtn', 'homeBtn', 'manualMoveBtn'
+            ];
+            for(let i=1; i<=6; i++) { elementsToToggle.push(`q${i}`); elementsToToggle.push(`num${i}`); }
+
+            const setDisabled = (state) => elementsToToggle.forEach(id => document.getElementById(id).disabled = state);
+
+            if (appState === 'DISCONNECTED') {
+                statusBadge.className = 'status-badge status-idle'; statusBadge.innerText = 'System Offline';
+                setDisabled(true);
+            } else if (appState === 'WAITING_FOR_OBJ') {
+                statusBadge.className = 'status-badge status-running'; statusBadge.innerText = 'Conveyor Running. Waiting...';
+                setDisabled(false);
+                document.getElementById('pickX').disabled = true; document.getElementById('pickY').disabled = true; document.getElementById('pickZ').disabled = true;
+                document.getElementById('placeX').disabled = true; document.getElementById('placeY').disabled = true; document.getElementById('placeZ').disabled = true;
+                document.getElementById('workflowBtn').disabled = true;
+            } else if (appState === 'READY_TO_PICK') {
+                statusBadge.className = 'status-badge status-detect'; statusBadge.innerText = isSimulation ? 'H.I.L. SIMULATION ACTIVE' : 'Object Detected! Ready.';
+                setDisabled(false);
+            } else if (appState === 'WORKING') {
+                statusBadge.className = 'status-badge status-working'; statusBadge.innerText = 'Executing Macro Trajectory...';
+                setDisabled(true);
+            }
+        }
+
+        setInterval(async () => {
+            if (appState !== 'WAITING_FOR_OBJ' || isSimulation) return; 
+            try {
+                let res = await fetch('/check_status');
+                let data = await res.json();
+                if(data.status === "success" && data.message === "OBJ_DETECTED") {
+                    appState = 'READY_TO_PICK'; updateUIState();
+                }
+            } catch(e) {}
+        }, 800); 
+
+        // ==============================================================================
+        // HARDWARE COMMS & THE MACRO PLAYER
+        // ==============================================================================
         async function connectSerial() {
             let port = document.getElementById('comPort').value;
             let statusText = document.getElementById('btText');
             let indicator = document.getElementById('btIndicator');
+            let btn = document.getElementById('connectBtn');
+            let simBtn = document.getElementById('simToggleBtn');
             
-            statusText.innerText = "Connecting...";
-            indicator.style.background = "#f59e0b";
-            indicator.style.boxShadow = "0 0 8px #f59e0b";
-
-            try {
-                const response = await fetch(`http://127.0.0.1:8000/connect_serial?port=${port}`);
-                const data = await response.json();
-
-                if (data.status === "success") {
-                    statusText.innerText = `Connected via USB`;
-                    indicator.style.background = "#10b981"; 
-                    indicator.style.boxShadow = "0 0 8px #10b981";
-                } else {
-                    statusText.innerText = `Error`;
-                    indicator.style.background = "#ef4444"; 
-                    indicator.style.boxShadow = "0 0 8px #ef4444";
-                }
-            } catch (error) {
-                statusText.innerText = "Failed";
-                indicator.style.background = "#ef4444";
-                indicator.style.boxShadow = "0 0 8px #ef4444";
+            isSimulation = false; 
+            if (simBtn) {
+                simBtn.innerText = "Enable Simulation Mode";
+                simBtn.style.borderColor = "var(--accent-purple)";
+                simBtn.style.color = "var(--accent-purple)";
             }
+            
+            btn.innerText = "Connecting..."; statusText.innerText = "Connecting..."; indicator.style.background = "#f59e0b";
+            try {
+                const response = await fetch(`/connect_serial?port=${port}`);
+                const data = await response.json();
+                if (data.status === "success") {
+                    btn.innerText = "Connected"; statusText.innerText = `Connected`; indicator.style.background = "#10b981"; indicator.style.boxShadow = "0 0 8px #10b981";
+                    appState = 'WAITING_FOR_OBJ'; updateUIState();
+                } else {
+                    btn.innerText = "Error"; statusText.innerText = `Error`; indicator.style.background = "#ef4444"; indicator.style.boxShadow = "0 0 8px #ef4444";
+                }
+            } catch (e) { btn.innerText = "Failed"; statusText.innerText = "Failed"; indicator.style.background = "#ef4444"; indicator.style.boxShadow = "0 0 8px #ef4444";}
         }
 
-        let lastSendTime = 0;
-        let pendingHardwareUpdate = null;
+        function pushToHardware(q, sol = 0) {
+            // Keepalive ensures the browser does not throttle or close the socket connection during rapid firing!
+            fetch(`/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}&sol=${sol}`, {
+                keepalive: true
+            }).catch(e=>{});
+        }
+        
+        function sendCommand(cmd) {
+            fetch(`/send_command?cmd=${cmd}`).catch(e=>{});
+        }
 
-        function pushToHardware(q) {
-            let now = Date.now();
-            // Pushing at 30 FPS interval (approx 33ms)
-            if (now - lastSendTime > 30) {
-                lastSendTime = now;
-                fetch(`http://127.0.0.1:8000/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`)
-                    .catch(e => console.error("Hardware push failed:", e));
-            } else {
-                clearTimeout(pendingHardwareUpdate);
-                pendingHardwareUpdate = setTimeout(() => {
-                    lastSendTime = Date.now();
-                    fetch(`http://127.0.0.1:8000/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`)
-                        .catch(e => console.error("Hardware push failed:", e));
-                }, 30);
-            }
+        function forceConveyorOverride() {
+            sendCommand('RESUME');
+            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ';
+            updateUIState();
         }
 
         function syncFromInput(i) {
-            let numInput = document.getElementById(`num${i}`);
-            let slider = document.getElementById(`q${i}`);
-            let val = parseFloat(numInput.value);
-            
-            let min = parseFloat(numInput.min);
-            let max = parseFloat(numInput.max);
-            if (val < min) val = min;
-            if (val > max) val = max;
-            
-            numInput.value = val.toFixed(1);
-            slider.value = val;
-            
+            let numInput = document.getElementById(`num${i}`); let slider = document.getElementById(`q${i}`);
+            let val = parseFloat(numInput.value); let min = parseFloat(numInput.min); let max = parseFloat(numInput.max);
+            if (val < min) val = min; if (val > max) val = max;
+            numInput.value = val.toFixed(1); slider.value = val;
             updateRobot();
         }
 
@@ -256,244 +540,128 @@
             let q = [];
             for (let i = 1; i <= 6; i++) {
                 let val = document.getElementById(`q${i}`).value;
-                if(document.activeElement !== document.getElementById(`num${i}`)) {
-                    document.getElementById(`num${i}`).value = parseFloat(val).toFixed(1);
-                }
+                if(document.activeElement !== document.getElementById(`num${i}`)) document.getElementById(`num${i}`).value = parseFloat(val).toFixed(1);
                 q.push(val);
             }
-
-            pushToHardware(q); 
-
+            pushToHardware(q, 0); 
             try {
-                const response = await fetch(`http://127.0.0.1:8000/kinematics?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`);
+                const response = await fetch(`/kinematics?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`);
                 const data = await response.json();
-
-                if (data.status === "success") {
-                    renderArm(data.joints);
-
-                    let endEffector = data.joints[data.joints.length - 1];
-                    if (document.activeElement !== document.getElementById('targetX')) document.getElementById('targetX').value = Math.round(endEffector[0]);
-                    if (document.activeElement !== document.getElementById('targetY')) document.getElementById('targetY').value = Math.round(endEffector[1]);
-                    if (document.activeElement !== document.getElementById('targetZ')) document.getElementById('targetZ').value = Math.round(endEffector[2]);
-                }
-            } catch (error) {
-                console.error("Server communication failure:", error);
-            }
+                if (data.status === "success") renderArm(data.joints);
+            } catch (error) { console.error("Server link failed", error); }
         }
 
-        // --- RENDER ARM & DRAW PATH ---
-        function renderArm(joints) {
-            function updateCylinder(cylinder, pointA, pointB) {
-                const dir = new THREE.Vector3().subVectors(pointB, pointA);
-                const length = dir.length();
-                if(length === 0) return; 
-                
-                cylinder.scale.set(1, length, 1);
-                cylinder.position.copy(pointA).add(dir.clone().multiplyScalar(0.5));
-                cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
-            }
+        // ==============================================================================
+        // THE MASTER MACRO EXECUTOR
+        // ==============================================================================
+        function executeMacro(url) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
 
-            for (let i = 0; i < joints.length; i++) {
-                let pt = new THREE.Vector3(joints[i][0], joints[i][2], -joints[i][1]); 
+                    if (data.status === "success") {
+                        let frames = data.frames;
+                        let currentFrame = 0;
 
-                if (!jointNodes[i]) {
-                    let geom = new THREE.SphereGeometry(12, 16, 16);
-                    let mat = matNode;
-                    let mesh = new THREE.Mesh(geom, mat);
-                    scene.add(mesh);
-                    jointNodes[i] = mesh;
-                }
-                jointNodes[i].position.copy(pt);
-
-                if (i < joints.length - 1) {
-                    let nextPt = new THREE.Vector3(joints[i+1][0], joints[i+1][2], -joints[i+1][1]);
-                    
-                    if (!linkCylinders[i]) {
-                        const cylGeom = new THREE.CylinderGeometry(15, 15, 1, 32);
-                        let activeMat = matGray;
-                        if (i === 3) activeMat = matSilver; 
-                        if (i === 5) cylGeom.scale(0.5, 1, 0.5); 
+                        // THE FIX: Decouple hardware loop from 3D visual render loop to eliminate HTTP Jitter!
+                        let macroTimer = setInterval(() => {
+                            if (currentFrame >= frames.length) {
+                                clearInterval(macroTimer);
+                                document.getElementById('moveMode').innerText = "IDLE";
+                                if (data.trigger_resume) sendCommand('RESUME');
+                                resolve(); 
+                                return; 
+                            }
+                            
+                            let frame = frames[currentFrame];
+                            
+                            // 1. FIRE HARDWARE FIRST! (Avoids graphical rendering delays completely)
+                            pushToHardware(frame.angles, frame.sol || 0);
+                            
+                            // 2. Update UI asynchronously
+                            document.getElementById('moveMode').innerText = frame.label || "MOVING";
+                            
+                            for (let i = 1; i <= 6; i++) {
+                                document.getElementById(`q${i}`).value = frame.angles[i-1];
+                                document.getElementById(`num${i}`).value = parseFloat(frame.angles[i-1]).toFixed(1);
+                            }
+                            
+                            renderArm(frame.joints);
+                            
+                            currentFrame++;
+                        }, 33); // Strictly fire exactly every 33.3ms (30 FPS)
                         
-                        let mesh = new THREE.Mesh(cylGeom, activeMat);
-                        scene.add(mesh);
-                        linkCylinders[i] = mesh;
-                    }
-                    updateCylinder(linkCylinders[i], pt, nextPt);
-                }
-            }
-
-            // --- TRACE THE END EFFECTOR PATH ---
-            let endEffector = joints[joints.length - 1];
-            let currentPos = new THREE.Vector3(endEffector[0], endEffector[2], -endEffector[1]);
-            
-            pathPoints.push(currentPos);
-            if (pathPoints.length > 300) {
-                pathPoints.shift();
-            }
-            pathGeometry.setFromPoints(pathPoints);
-
-            document.getElementById('outX').innerText = endEffector[0].toFixed(2);
-            document.getElementById('outY').innerText = endEffector[1].toFixed(2);
-            document.getElementById('outZ').innerText = endEffector[2].toFixed(2);
+                    } else { reject(); }
+                } catch (error) { reject(); }
+            });
         }
 
-        // --- SAFE-ARC HOMING (Python Engine) ---
-        async function goHome() {
-            const btnHome = document.getElementById('homeBtn');
-            const btnMove = document.getElementById('moveBtn');
-            const telMode = document.getElementById('telemetryMode');
-            const telError = document.getElementById('telemetryError');
+        // ==============================================================================
+        // MACRO ROUTER ENDPOINTS
+        // ==============================================================================
+        async function triggerHomeSequence() {
+            appState = 'WORKING'; updateUIState();
+            let cur = []; for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
             
-            btnHome.disabled = true;
-            btnMove.disabled = true;
-            telMode.innerText = "Calculating Home...";
-            telMode.style.color = "#f59e0b"; // Orange while thinking
-
-            pathPoints.length = 0;
-            pathGeometry.setFromPoints(pathPoints);
-
-            let cur = [];
-            for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
+            try {
+                await executeMacro(`/inverse_kinematics?mode=macro_home&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
+            } catch (e) { alert("Homing Aborted"); }
             
-            let currentX = parseFloat(document.getElementById('outX').innerText);
-            let currentY = parseFloat(document.getElementById('outY').innerText);
-            let currentZ = parseFloat(document.getElementById('outZ').innerText);
+            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState();
+        }
+
+        async function executeManualMovement() {
+            appState = 'WORKING'; updateUIState();
+            let x = parseFloat(document.getElementById('manX').value);
+            let y = parseFloat(document.getElementById('manY').value);
+            let z = parseFloat(document.getElementById('manZ').value);
+            let cur = []; for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
+            
+            try {
+                await executeMacro(`/inverse_kinematics?mode=macro_manual&x=${x}&y=${y}&z=${z}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
+            } catch (e) { alert("Sequence Aborted: Target coordinate exceeds physical reach constraints."); document.getElementById('moveMode').innerText = "ERROR"; }
+            
+            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState();
+        }
+
+        async function executeHybridSequence() {
+            appState = 'WORKING'; updateUIState();
+            pathPoints.length = 0; pathGeometry.setFromPoints(pathPoints);
+
+            let px = parseFloat(document.getElementById('pickX').value);
+            let py = parseFloat(document.getElementById('pickY').value);
+            let pz = parseFloat(document.getElementById('pickZ').value);
+            let dx = parseFloat(document.getElementById('placeX').value);
+            let dy = parseFloat(document.getElementById('placeY').value);
+            let dz = parseFloat(document.getElementById('placeZ').value);
+            let cur = []; for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
 
             try {
-                // Call Python server using the new "safe_home" mode
-                const response = await fetch(`http://127.0.0.1:8000/inverse_kinematics?x=${currentX}&y=${currentY}&z=${currentZ}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}&mode=safe_home`);
-                const data = await response.json();
-
-                if (data.status === "success" || data.status === "warning") {
-                    
-                    telMode.innerText = "Executing Home";
-                    telMode.style.color = "#10b981"; // Green while moving
-                    telError.innerText = "0.00 mm"; // Home is always exact
-                    telError.className = "telemetry-status";
-
-                    let frames = data.frames;
-                    let currentFrame = 0;
-
-                    function playNextFrame() {
-                        if (currentFrame >= frames.length) {
-                            btnHome.disabled = false;
-                            btnMove.disabled = false;
-                            telMode.innerText = "Standby";
-                            telMode.style.color = "#cbd5e1";
-                            return;
-                        }
-
-                        let frame = frames[currentFrame];
-
-                        // Play the frame simultaneously to the UI and hardware
-                        for (let i = 1; i <= 6; i++) {
-                            document.getElementById(`q${i}`).value = frame.angles[i-1];
-                            document.getElementById(`num${i}`).value = parseFloat(frame.angles[i-1]).toFixed(1);
-                        }
-
-                        renderArm(frame.joints);
-                        pushToHardware(frame.angles);
-
-                        currentFrame++;
-                        setTimeout(playNextFrame, 33); // Enforce strict 30 FPS playback
-                    }
-                    playNextFrame(); 
-                } else {
-                    console.warn("Homing failed on server side.");
-                    telMode.innerText = "Failed";
-                    telMode.style.color = "#ef4444";
-                    btnHome.disabled = false;
-                    btnMove.disabled = false;
-                }
+                await executeMacro(`/inverse_kinematics?mode=macro_auto&px=${px}&py=${py}&pz=${pz}&dx=${dx}&dy=${dy}&dz=${dz}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
             } catch (error) {
-                console.error("Homing engine link failure:", error);
-                telMode.innerText = "Server Timeout";
-                telMode.style.color = "#ef4444";
-                btnHome.disabled = false;
-                btnMove.disabled = false;
+                alert("Sequence Aborted: Target Coordinate or Hover Coordinate exceeds physical reach constraints.");
+                document.getElementById('moveMode').innerText = "ERROR";
             }
+            
+            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState();
         }
 
-        // --- IK SEQUENCE (JACOBIAN EXECUTION) ---
-        async function goToCoordinate() {
-            const btnHome = document.getElementById('homeBtn');
-            const btnMove = document.getElementById('moveBtn');
-            const telMode = document.getElementById('telemetryMode');
-            const telError = document.getElementById('telemetryError');
-            
-            btnHome.disabled = true; 
-            btnMove.disabled = true;
-            telMode.innerText = "Calculating DLS...";
-            telMode.style.color = "#f59e0b"; // Orange while thinking
-            
-            pathPoints.length = 0;
-            pathGeometry.setFromPoints(pathPoints);
-
-            let cur = [];
-            for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
-
-            let x = document.getElementById('targetX').value;
-            let y = document.getElementById('targetY').value;
-            let z = document.getElementById('targetZ').value;
-
+        async function init3DViewer() {
             try {
-                // Call Python Advanced Jacobian Solver
-                const response = await fetch(`http://127.0.0.1:8000/inverse_kinematics?x=${x}&y=${y}&z=${z}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}&mode=auto_plunge`);
-                const data = await response.json();
-
-                if (data.status === "success" || data.status === "warning") {
-                    
-                    // Update the Telemetry UI
-                    telMode.innerText = "Executing Staple";
-                    telMode.style.color = "#10b981"; // Green while executing
-                    
-                    telError.innerText = data.error_mm.toFixed(2) + " mm";
-                    telError.className = data.error_mm <= 5.0 ? "telemetry-status" : "telemetry-warning";
-
-                    let frames = data.frames;
-                    let currentFrame = 0;
-
-                    function playNextFrame() {
-                        if (currentFrame >= frames.length) {
-                            btnHome.disabled = false;
-                            btnMove.disabled = false;
-                            telMode.innerText = "Target Reached";
-                            telMode.style.color = "#cbd5e1";
-                            return;
-                        }
-
-                        let frame = frames[currentFrame];
-
-                        for (let i = 1; i <= 6; i++) {
-                            document.getElementById(`q${i}`).value = frame.angles[i-1];
-                            document.getElementById(`num${i}`).value = parseFloat(frame.angles[i-1]).toFixed(1);
-                        }
-
-                        renderArm(frame.joints);
-                        pushToHardware(frame.angles);
-
-                        currentFrame++;
-                        setTimeout(playNextFrame, 33); 
-                    }
-                    playNextFrame(); 
-                    
-                } else {
-                    alert("Unreachable coordinate! Mathematical Singularity or Workspace Limit Hit.");
-                    telMode.innerText = "Failed: Singularity";
-                    telMode.style.color = "#ef4444";
-                    btnHome.disabled = false;
-                    btnMove.disabled = false;
+                let res = await fetch(`/kinematics?q1=0&q2=0&q3=0&q4=0&q5=0&q6=0`);
+                let data = await res.json();
+                if (data.status === "success") {
+                    let ee = data.joints[data.joints.length - 1];
+                    lastPos = { x: ee[0], y: ee[1], z: ee[2] };
+                    renderArm(data.joints);
                 }
-            } catch (error) {
-                console.error("IK trajectory engine link failure:", error);
-                telMode.innerText = "Server Timeout";
-                telMode.style.color = "#ef4444";
-                btnHome.disabled = false;
-                btnMove.disabled = false;
+            } catch (e) {
+                renderArm([[0,0,0], [0,0,125], [0,0,285], [0,0,335], [0,0,620], [0,0,700]]);
             }
         }
-
-        updateRobot();
+        init3DViewer();
+        updateUIState();
     </script>
 </body> 
 </html>
