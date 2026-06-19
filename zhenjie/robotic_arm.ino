@@ -8,9 +8,15 @@ const int irSensorPin = 3;     // IR Sensor input
 const int conveyorPin = 4;     // Relay for Conveyor Belt
 const int suckMotorPin = 6;    // Relay for Suction Pump
 
-bool lastIrState = HIGH;      
 bool waitingForPickup = false;
 unsigned long lastPingTime = 0;
+
+// --- SETTLING & VERIFICATION FILTER ---
+unsigned long verifyStartTime = 0;
+bool isVerifying = false;
+
+// E-STOP SAFETY LOCK
+bool eStopActive = false; 
 
 String inputString = "";
 boolean stringComplete = false;
@@ -19,16 +25,14 @@ boolean stringComplete = false;
 int currentPWM[6] = {324, 319, 131, 287, 299, 307};
 
 void setup() {
-  // MASTER USB SERIAL LINK
   // High-speed 115200 baud is required to catch Python's 30FPS trajectory stream
   Serial.begin(115200); 
   
+  // Using INPUT_PULLUP prevents the "Phantom Trigger" bug!
   pinMode(irSensorPin, INPUT_PULLUP); 
   pinMode(conveyorPin, OUTPUT);
   pinMode(suckMotorPin, OUTPUT);
   
-  // Initial hardware state
-  // NOTE: If using Active-LOW relays, swap HIGH and LOW here!
   digitalWrite(suckMotorPin, LOW); 
   digitalWrite(conveyorPin, HIGH); // Auto-start the conveyor belt
   
@@ -45,25 +49,38 @@ void setup() {
 
 void loop() {
   // ==========================================
-  // 1. HARDWARE SENSOR LOGIC (CONVEYOR HALT)
+  // 1. HARDWARE SENSOR LOGIC (INSTANT HALT + 500ms SETTLE)
   // ==========================================
-  bool currentIrState = digitalRead(irSensorPin);
-  
-  // Trigger on falling edge (Object breaks the beam)
-  if (currentIrState == LOW && lastIrState == HIGH) { 
-    digitalWrite(conveyorPin, LOW); // Stop the conveyor
-    waitingForPickup = true;        
-    delay(50); // 50ms Debounce to prevent noisy sensor triggers
-  }
-  lastIrState = currentIrState;
-
-  // Broadcast to Python that an object is ready over USB
-  // We use a 1-second interval so we don't flood the serial buffer
-  if (waitingForPickup) {
-    if (millis() - lastPingTime > 1000) {
-      Serial.println("OBJ_DETECTED"); 
-      lastPingTime = millis();
-    }
+  if (!eStopActive) {
+      bool currentIrState = digitalRead(irSensorPin);
+      
+      // Only process sensor if we are currently running the conveyor
+      if (!waitingForPickup) {
+          if (currentIrState == LOW) { // Object is blocking the sensor
+              // 1. START TIMER: Do NOT stop the belt yet!
+              if (!isVerifying) {
+                  isVerifying = true;
+                  verifyStartTime = millis();
+              } 
+              // 2. CONTINUOUS FILTER: If it stays for 500ms continuously, THEN stop the belt
+              else if (millis() - verifyStartTime >= 200) {
+                  digitalWrite(conveyorPin, LOW); // Stop the conveyor NOW
+                  waitingForPickup = true;        // Flag ready for Python
+                  isVerifying = false;            // Reset the tracker
+              }
+          } else {
+              // 3. RECOVERY: If it was a glitch (object left before 500ms), just reset timer
+              isVerifying = false;
+          }
+      }
+    
+      // Broadcast to Python that an object is ready over USB
+      if (waitingForPickup) {
+        if (millis() - lastPingTime > 1000) {
+          Serial.println("OBJ_DETECTED"); 
+          lastPingTime = millis();
+        }
+      }
   }
 
   // ==========================================
@@ -81,24 +98,33 @@ void loop() {
   }
 
   // ==========================================
-  // 3. PARSE COMMANDS & APPLY INSTANTLY
+  // 3. PARSE COMMANDS & ENFORCE SAFETY
   // ==========================================
   if (stringComplete) {
-    if (inputString == "RESUME") {
+      
+    // --- EMERGENCY STOP TRIGGER ---
+    if (inputString == "ESTOP") {
+      eStopActive = true;
+      digitalWrite(conveyorPin, LOW);
+      digitalWrite(suckMotorPin, LOW);
+      waitingForPickup = false;
+      isVerifying = false;
+    }
+    // --- EMERGENCY STOP RESET ---
+    else if (inputString == "RESET") {
+      eStopActive = false;
+    }
+    // --- STANDARD SYSTEM RESUME ---
+    else if (inputString == "RESUME" && !eStopActive) {
       digitalWrite(conveyorPin, HIGH); // Restart conveyor
       waitingForPickup = false; 
+      isVerifying = false;
     } 
-    // Kept for backward compatibility/manual overrides
-    else if (inputString == "SUCK_ON") {
-      digitalWrite(suckMotorPin, HIGH); 
-    }
-    else if (inputString == "SUCK_OFF") {
-      digitalWrite(suckMotorPin, LOW); 
-    }
-    else {
+    // --- TRAJECTORY FRAME EXECUTION ---
+    else if (!eStopActive) {
       // It's a 7-value array from Python: <q1,q2,q3,q4,q5,q6,sol>
-      // We clear waitingForPickup in case of a manual override
       waitingForPickup = false; 
+      isVerifying = false;
       
       int tempPWM[6];
       int solState = 0;
@@ -122,12 +148,10 @@ void loop() {
           
           for(int j = 0; j < 6; j++){
               currentPWM[j] = tempPWM[j];
-              
-              // WRITE INSTANTLY
               pwm.setPWM(j, 0, currentPWM[j]); 
           }
 
-          // Apply Solenoid State instantly with the movement frame!
+          // Apply Solenoid State instantly with the movement frame
           if (solState == 1) {
               digitalWrite(suckMotorPin, HIGH);
           } else {
