@@ -54,9 +54,11 @@
         .btn-hardware { background: linear-gradient(135deg, var(--accent-green), #059669); }
         .btn-home { background: linear-gradient(135deg, var(--accent-orange), #d97706); }
         .btn-hybrid { background: linear-gradient(135deg, var(--accent-purple), #7e22ce); }
-        .btn-override { background: transparent; border: 1px solid #475569; color: #94a3b8; margin-top: 10px; box-shadow: none;}
-        .btn-override:hover:not(:disabled) { background: #1e293b; color: #fff; border-color: #fff; }
         
+        /* Dedicated E-Stop Styling */
+        .btn-estop { background: linear-gradient(135deg, var(--danger), #b91c1c); color: white; margin-top: 15px; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); text-transform: uppercase; letter-spacing: 1px; }
+        .btn-estop:hover:not(:disabled) { background: #b91c1c; box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6); }
+
         /* MAIN CONTENT */
         #main-content { flex-grow: 1; position: relative; background-color: var(--bg-main); overflow: hidden; display: flex; flex-direction: column; }
         #view-toggles { position: absolute; top: 25px; left: 25px; display: flex; background: rgba(15, 23, 42, 0.8); border-radius: 8px; border: 1px solid var(--border-color); z-index: 20; backdrop-filter: blur(5px); padding: 4px; }
@@ -79,6 +81,17 @@
         .bt-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 8px var(--danger); transition: 0.3s; }
         canvas { display: block; outline: none; }
 
+        /* Toggle Switch Styling */
+        .toggle-container { display: flex; align-items: center; gap: 12px; margin-top: 15px; }
+        .switch { position: relative; display: inline-block; width: 46px; height: 24px; flex-shrink: 0; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--bg-main); border: 2px solid var(--border-color); transition: .4s; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: var(--text-muted); transition: .4s; }
+        input:checked + .slider { background-color: rgba(168, 85, 247, 0.2); border-color: var(--accent-purple); }
+        input:checked + .slider:before { transform: translateX(22px); background-color: var(--accent-purple); }
+        .slider.round { border-radius: 24px; }
+        .slider.round:before { border-radius: 50%; }
+
         @media (max-width: 800px) {
             body { flex-direction: column-reverse; overflow-y: auto; }
             #sidebar { width: 100%; height: auto; border-right: none; border-top: 1px solid var(--border-color); padding: 15px; box-sizing: border-box; }
@@ -93,13 +106,24 @@
     <div id="sidebar">
         <h2>Control Panel</h2>
         
+        <!-- GLOBAL E-STOP & LINK AREA -->
         <div class="slider-group panel-hardware">
             <h3 style="color: var(--accent-green);">System Link</h3>
             <div class="flex-row">
                 <input type="text" id="comPort" value="COM10" placeholder="COM Port">
                 <button onclick="connectSerial()" class="btn-hardware" id="connectBtn">Connect</button>
             </div>
-            <button onclick="toggleSimMode()" id="simToggleBtn" style="background: transparent; border: 1px solid var(--accent-purple); color: var(--accent-purple); margin-top: 15px; box-shadow: none;">Enable Simulation Mode</button>
+            
+            <div class="toggle-container">
+                <label class="switch">
+                    <input type="checkbox" id="simToggleSwitch" onchange="toggleSimMode()">
+                    <span class="slider round"></span>
+                </label>
+                <span id="simToggleLabel" style="color: var(--accent-purple); font-weight: 600; font-size: 0.9rem;">Simulation Mode: OFF</span>
+            </div>
+            
+            <!-- Global Emergency Stop Button -->
+            <button onclick="toggleEStop()" id="globalEstopBtn" class="btn-estop" disabled>EMERGENCY STOP</button>
         </div>
 
         <div class="tab-switcher">
@@ -165,7 +189,6 @@
                 </div>
 
                 <button id="workflowBtn" class="btn-hybrid" onclick="executeHybridSequence()" disabled style="margin-top: 15px;">Execute Auto Workflow</button>
-                <button id="overrideBtn" class="btn-override" onclick="forceConveyorOverride()" disabled>Force Conveyor Restart</button>
             </div>
         </div>
     </div>
@@ -183,6 +206,14 @@
             <div class="coord-line">Y: <span id="outY">0.00</span> mm</div>
             <div class="coord-line">Z: <span id="outZ">0.00</span> mm</div>
             <div style="font-size: 0.8rem; margin-top: 10px; color: #cbd5e1; border-top: 1px solid var(--border-color); padding-top: 5px;">Engine: <span id="moveMode" style="color: var(--accent-purple); width:auto;">IDLE</span></div>
+            
+            <!-- NEW: D-H Frame Axis Legend -->
+            <div style="font-size: 0.75rem; margin-top: 8px; color: #94a3b8; display:flex; justify-content: space-between; align-items: center;">
+                <span><b style="color:#ef4444;">X</b></span>
+                <span><b style="color:#10b981;">Y</b></span>
+                <span><b style="color:#3b82f6;">Z</b></span>
+                <span style="border: 1px solid #334155; padding: 2px 6px; border-radius: 4px;">D-H Frames</span>
+            </div>
         </div>
 
         <div class="bt-floating-status">
@@ -331,7 +362,7 @@
         }
 
         // ==============================================================================
-        // THREE.JS SCENE SETUP
+        // THREE.JS SCENE SETUP & D-H KINEMATICS
         // ==============================================================================
         const container = document.getElementById('plot-container');
         const scene = new THREE.Scene();
@@ -368,6 +399,26 @@
         const pathLine = new THREE.Line(pathGeometry, new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 3, transparent: true, opacity: 0.85 }));
         scene.add(pathLine);
 
+        // --- NEW: JS Denavit-Hartenberg Math Engine ---
+        // Converts mathematical robotics coordinates [X,Y,Z] into Three.js web coordinates [X,Z,-Y]
+        const R2T = new THREE.Matrix4().set(
+            1, 0, 0, 0,
+            0, 0, 1, 0,
+            0, -1, 0, 0,
+            0, 0, 0, 1
+        );
+
+        function getDHMatrix(a, alpha, d, theta) {
+            let cosT = Math.cos(theta), sinT = Math.sin(theta);
+            let cosA = Math.cos(alpha), sinA = Math.sin(alpha);
+            return new THREE.Matrix4().set(
+                cosT, -sinT*cosA,  sinT*sinA, a*cosT,
+                sinT,  cosT*cosA, -cosT*sinA, a*sinT,
+                0,     sinA,       cosA,      d,
+                0,     0,          0,         1
+            );
+        }
+
         function renderArm(joints) {
             function updateCylinder(cylinder, pointA, pointB) {
                 const dir = new THREE.Vector3().subVectors(pointB, pointA);
@@ -377,13 +428,60 @@
                 cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
             }
 
+            // 1. DYNAMICALLY REBUILD D-H MATRICES IN JAVASCRIPT
+            let angles = [];
+            for(let i=1; i<=6; i++) {
+                angles.push(parseFloat(document.getElementById(`q${i}`).value) * Math.PI / 180);
+            }
+            
+            let math_thetas = [...angles];
+            math_thetas[1] += Math.PI / 2;
+            
+            // CRITICAL FIX 1: Subtract original angles[1] to perfectly match Python's 'thetas[1]'
+            math_thetas[2] -= angles[1]; 
+
+            // Same physical constraints as your Python backend!
+            let dh_params = [
+                [30, Math.PI/2, 125, math_thetas[0]],
+                [160, 0, 0, math_thetas[1]],
+                [50, Math.PI/2, 0, math_thetas[2]],
+                [0, -Math.PI/2, 285, math_thetas[3]],
+                [0, Math.PI/2, 0, math_thetas[4]],
+                [0, 0, 75, math_thetas[5]]
+            ];
+
+            let currentT = new THREE.Matrix4();
+            let matrices = [currentT.clone()]; // Start with Identity matrix at base
+            for(let i=0; i<dh_params.length; i++) {
+                let step = getDHMatrix(...dh_params[i]);
+                currentT.multiplyMatrices(currentT, step);
+                matrices.push(currentT.clone());
+            }
+
+            // 2. RENDER ARM AND APPLY D-H LOCAL ORIENTATIONS
             for (let i = 0; i < joints.length; i++) {
                 let pt = new THREE.Vector3(joints[i][0], joints[i][2], -joints[i][1]); 
                 if (!jointNodes[i]) {
                     let mesh = new THREE.Mesh(new THREE.SphereGeometry(12, 16, 16), matNode);
-                    scene.add(mesh); jointNodes[i] = mesh;
+                    
+                    // Add standard Cartesian Frame Axes (Red=X, Green=Y, Blue=Z)
+                    let axesHelper = new THREE.AxesHelper(75); 
+                    mesh.add(axesHelper);
+
+                    scene.add(mesh); 
+                    jointNodes[i] = mesh;
+                    mesh.matrixAutoUpdate = false; 
                 }
-                jointNodes[i].position.copy(pt);
+                
+                // Map the theoretical D-H matrix directly onto the physical 3D object
+                let m3js = new THREE.Matrix4().multiplyMatrices(R2T, matrices[i]);
+                
+                // CRITICAL FIX 2: Hard-lock the D-H frame to the exact Python origin!
+                // This guarantees the axes can never physically detach from the cylinders.
+                m3js.setPosition(pt);
+
+                jointNodes[i].matrix.copy(m3js);
+                jointNodes[i].updateMatrixWorld(true);
 
                 if (i < joints.length - 1) {
                     let nextPt = new THREE.Vector3(joints[i+1][0], joints[i+1][2], -joints[i+1][1]);
@@ -410,34 +508,78 @@
         }
 
         // ==============================================================================
-        // STATE MACHINE LOGIC
+        // E-STOP & STATE MACHINE LOGIC
         // ==============================================================================
         let appState = 'DISCONNECTED'; 
         let isSimulation = false;
+        let isEStop = false; // System-wide E-Stop flag
+
+        function toggleEStop() {
+            let btn = document.getElementById('globalEstopBtn');
+            if (!isEStop) {
+                // ACTIVATE E-STOP
+                isEStop = true;
+                sendCommand('ESTOP');
+                appState = 'ESTOPPED';
+                updateUIState();
+                
+                btn.innerText = "RESET SYSTEM";
+                btn.style.background = "var(--accent-orange)";
+                btn.style.boxShadow = "0 4px 15px rgba(245,158,11,0.4)";
+                
+                document.getElementById('btIndicator').style.background = "var(--danger)";
+                document.getElementById('btIndicator').style.boxShadow = "0 0 8px var(--danger)";
+                document.getElementById('btText').innerText = "E-STOP ACTIVE";
+            } else {
+                // DEACTIVATE E-STOP
+                isEStop = false;
+                sendCommand('RESET');
+                
+                appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; 
+                // Automatically restart the conveyor belt when the system is deemed safe again
+                sendCommand('RESUME');
+                
+                updateUIState();
+                
+                btn.innerText = "EMERGENCY STOP";
+                btn.style.background = ""; // Revert to CSS default
+                btn.style.boxShadow = ""; 
+                
+                document.getElementById('btIndicator').style.background = isSimulation ? "#a855f7" : "#10b981";
+                document.getElementById('btIndicator').style.boxShadow = isSimulation ? "0 0 8px #a855f7" : "0 0 8px #10b981";
+                document.getElementById('btText').innerText = isSimulation ? "Hardware-in-Loop Link" : "Connected";
+            }
+        }
 
         function toggleSimMode() {
-            let btn = document.getElementById('simToggleBtn');
+            let checkbox = document.getElementById('simToggleSwitch');
+            let label = document.getElementById('simToggleLabel');
+            
             if (!isSimulation) {
                 isSimulation = true; 
+                if (checkbox) checkbox.checked = true; // Sync UI if triggered programmatically
                 appState = 'READY_TO_PICK'; 
                 updateUIState();
-                document.getElementById('sysStatus').innerText = 'Manual Simulation Active';
-                document.getElementById('btText').innerText = "Manual Simulation Mode";
+                
+                document.getElementById('sysStatus').innerText = 'H.I.L. SIMULATION ACTIVE';
+                document.getElementById('btText').innerText = "Hardware-in-Loop Link";
                 document.getElementById('btIndicator').style.background = "#a855f7";
                 document.getElementById('btIndicator').style.boxShadow = "0 0 8px #a855f7";
-                btn.innerText = "Cancel Simulation Mode";
-                btn.style.borderColor = "var(--danger)";
-                btn.style.color = "var(--danger)";
+                
+                label.innerText = "Simulation Mode: ON";
+                label.style.color = "var(--danger)";
             } else {
                 isSimulation = false; 
+                if (checkbox) checkbox.checked = false; // Sync UI
                 appState = 'DISCONNECTED'; 
                 updateUIState();
+                
                 document.getElementById('btText').innerText = "Disconnected";
                 document.getElementById('btIndicator').style.background = "var(--danger)";
                 document.getElementById('btIndicator').style.boxShadow = "0 0 8px var(--danger)";
-                btn.innerText = "Enable Simulation Mode";
-                btn.style.borderColor = "var(--accent-purple)";
-                btn.style.color = "var(--accent-purple)";
+                
+                label.innerText = "Simulation Mode: OFF";
+                label.style.color = "var(--accent-purple)";
                 document.getElementById('connectBtn').innerText = "Connect";
             }
         }
@@ -446,7 +588,7 @@
             const statusBadge = document.getElementById('sysStatus');
             const elementsToToggle = [
                 'pickX', 'pickY', 'pickZ', 'placeX', 'placeY', 'placeZ', 'manX', 'manY', 'manZ',
-                'workflowBtn', 'overrideBtn', 'homeBtn', 'manualMoveBtn'
+                'workflowBtn', 'homeBtn', 'manualMoveBtn'
             ];
             for(let i=1; i<=6; i++) { elementsToToggle.push(`q${i}`); elementsToToggle.push(`num${i}`); }
 
@@ -454,24 +596,42 @@
 
             if (appState === 'DISCONNECTED') {
                 statusBadge.className = 'status-badge status-idle'; statusBadge.innerText = 'System Offline';
+                statusBadge.style = "";
                 setDisabled(true);
-            } else if (appState === 'WAITING_FOR_OBJ') {
-                statusBadge.className = 'status-badge status-running'; statusBadge.innerText = 'Conveyor Running. Waiting...';
-                setDisabled(false);
-                document.getElementById('pickX').disabled = true; document.getElementById('pickY').disabled = true; document.getElementById('pickZ').disabled = true;
-                document.getElementById('placeX').disabled = true; document.getElementById('placeY').disabled = true; document.getElementById('placeZ').disabled = true;
-                document.getElementById('workflowBtn').disabled = true;
-            } else if (appState === 'READY_TO_PICK') {
-                statusBadge.className = 'status-badge status-detect'; statusBadge.innerText = isSimulation ? 'H.I.L. SIMULATION ACTIVE' : 'Object Detected! Ready.';
-                setDisabled(false);
-            } else if (appState === 'WORKING') {
-                statusBadge.className = 'status-badge status-working'; statusBadge.innerText = 'Executing Macro Trajectory...';
+                document.getElementById('globalEstopBtn').disabled = true;
+            } 
+            else if (appState === 'ESTOPPED') {
+                statusBadge.className = 'status-badge status-detect'; 
+                statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+                statusBadge.style.color = '#ef4444';
+                statusBadge.style.border = '1px solid #ef4444';
+                statusBadge.innerText = 'SYSTEM HALTED (E-STOP)';
                 setDisabled(true);
+                document.getElementById('globalEstopBtn').disabled = false; // Always allow the Reset
+            }
+            else {
+                // Remove hardcoded E-Stop styling if active
+                statusBadge.style = "";
+                document.getElementById('globalEstopBtn').disabled = false;
+
+                if (appState === 'WAITING_FOR_OBJ') {
+                    statusBadge.className = 'status-badge status-running'; statusBadge.innerText = 'Conveyor Running. Waiting...';
+                    setDisabled(false);
+                    document.getElementById('pickX').disabled = true; document.getElementById('pickY').disabled = true; document.getElementById('pickZ').disabled = true;
+                    document.getElementById('placeX').disabled = true; document.getElementById('placeY').disabled = true; document.getElementById('placeZ').disabled = true;
+                    document.getElementById('workflowBtn').disabled = true;
+                } else if (appState === 'READY_TO_PICK') {
+                    statusBadge.className = 'status-badge status-detect'; statusBadge.innerText = isSimulation ? 'H.I.L. SIMULATION ACTIVE' : 'Object Detected! Ready.';
+                    setDisabled(false);
+                } else if (appState === 'WORKING') {
+                    statusBadge.className = 'status-badge status-working'; statusBadge.innerText = 'Executing Macro Trajectory...';
+                    setDisabled(true);
+                }
             }
         }
 
         setInterval(async () => {
-            if (appState !== 'WAITING_FOR_OBJ' || isSimulation) return; 
+            if (appState !== 'WAITING_FOR_OBJ' || isSimulation || isEStop) return; 
             try {
                 let res = await fetch('/check_status');
                 let data = await res.json();
@@ -489,13 +649,14 @@
             let statusText = document.getElementById('btText');
             let indicator = document.getElementById('btIndicator');
             let btn = document.getElementById('connectBtn');
-            let simBtn = document.getElementById('simToggleBtn');
+            let checkbox = document.getElementById('simToggleSwitch');
+            let label = document.getElementById('simToggleLabel');
             
             isSimulation = false; 
-            if (simBtn) {
-                simBtn.innerText = "Enable Simulation Mode";
-                simBtn.style.borderColor = "var(--accent-purple)";
-                simBtn.style.color = "var(--accent-purple)";
+            if (checkbox) checkbox.checked = false;
+            if (label) {
+                label.innerText = "Simulation Mode: OFF";
+                label.style.color = "var(--accent-purple)";
             }
             
             btn.innerText = "Connecting..."; statusText.innerText = "Connecting..."; indicator.style.background = "#f59e0b";
@@ -512,7 +673,6 @@
         }
 
         function pushToHardware(q, sol = 0) {
-            // Keepalive ensures the browser does not throttle or close the socket connection during rapid firing!
             fetch(`/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}&sol=${sol}`, {
                 keepalive: true
             }).catch(e=>{});
@@ -520,12 +680,6 @@
         
         function sendCommand(cmd) {
             fetch(`/send_command?cmd=${cmd}`).catch(e=>{});
-        }
-
-        function forceConveyorOverride() {
-            sendCommand('RESUME');
-            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ';
-            updateUIState();
         }
 
         function syncFromInput(i) {
@@ -564,22 +718,27 @@
                         let frames = data.frames;
                         let currentFrame = 0;
 
-                        // THE FIX: Decouple hardware loop from 3D visual render loop to eliminate HTTP Jitter!
                         let macroTimer = setInterval(() => {
+                            // ABORT MACRO IMMEDIATELY IF ESTOP IS ACTIVE
+                            if (isEStop) {
+                                clearInterval(macroTimer);
+                                document.getElementById('moveMode').innerText = "HALTED";
+                                resolve(); 
+                                return;
+                            }
+
                             if (currentFrame >= frames.length) {
                                 clearInterval(macroTimer);
                                 document.getElementById('moveMode').innerText = "IDLE";
-                                if (data.trigger_resume) sendCommand('RESUME');
+                                // Re-engage conveyor at the end of the Auto workflow!
+                                if (data.trigger_resume && !isEStop) sendCommand('RESUME');
                                 resolve(); 
                                 return; 
                             }
                             
                             let frame = frames[currentFrame];
-                            
-                            // 1. FIRE HARDWARE FIRST! (Avoids graphical rendering delays completely)
                             pushToHardware(frame.angles, frame.sol || 0);
                             
-                            // 2. Update UI asynchronously
                             document.getElementById('moveMode').innerText = frame.label || "MOVING";
                             
                             for (let i = 1; i <= 6; i++) {
@@ -588,10 +747,8 @@
                             }
                             
                             renderArm(frame.joints);
-                            
                             currentFrame++;
-                        }, 33); // Strictly fire exactly every 33.3ms (30 FPS)
-                        
+                        }, 33);
                     } else { reject(); }
                 } catch (error) { reject(); }
             });
@@ -608,7 +765,7 @@
                 await executeMacro(`/inverse_kinematics?mode=macro_home&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
             } catch (e) { alert("Homing Aborted"); }
             
-            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState();
+            if (!isEStop) { appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState(); }
         }
 
         async function executeManualMovement() {
@@ -620,9 +777,9 @@
             
             try {
                 await executeMacro(`/inverse_kinematics?mode=macro_manual&x=${x}&y=${y}&z=${z}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
-            } catch (e) { alert("Sequence Aborted: Target coordinate exceeds physical reach constraints."); document.getElementById('moveMode').innerText = "ERROR"; }
+            } catch (e) { if (!isEStop) { alert("Sequence Aborted: Target coordinate exceeds physical reach constraints."); document.getElementById('moveMode').innerText = "ERROR"; } }
             
-            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState();
+            if (!isEStop) { appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState(); }
         }
 
         async function executeHybridSequence() {
@@ -640,11 +797,13 @@
             try {
                 await executeMacro(`/inverse_kinematics?mode=macro_auto&px=${px}&py=${py}&pz=${pz}&dx=${dx}&dy=${dy}&dz=${dz}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
             } catch (error) {
-                alert("Sequence Aborted: Target Coordinate or Hover Coordinate exceeds physical reach constraints.");
-                document.getElementById('moveMode').innerText = "ERROR";
+                if (!isEStop) {
+                    alert("Sequence Aborted: Target Coordinate or Hover Coordinate exceeds physical reach constraints.");
+                    document.getElementById('moveMode').innerText = "ERROR";
+                }
             }
             
-            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState();
+            if (!isEStop) { appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState(); }
         }
 
         async function init3DViewer() {
