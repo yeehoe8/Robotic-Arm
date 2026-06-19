@@ -106,7 +106,6 @@
     <div id="sidebar">
         <h2>Control Panel</h2>
         
-        <!-- GLOBAL E-STOP & LINK AREA -->
         <div class="slider-group panel-hardware">
             <h3 style="color: var(--accent-green);">System Link</h3>
             <div class="flex-row">
@@ -114,7 +113,6 @@
                 <button onclick="connectSerial()" class="btn-hardware" id="connectBtn">Connect</button>
             </div>
             
-            <!-- Replaced Button with Toggle Switch -->
             <div class="toggle-container">
                 <label class="switch">
                     <input type="checkbox" id="simToggleSwitch" onchange="toggleSimMode()">
@@ -123,7 +121,6 @@
                 <span id="simToggleLabel" style="color: var(--accent-purple); font-weight: 600; font-size: 0.9rem;">Simulation Mode: OFF</span>
             </div>
             
-            <!-- Global Emergency Stop Button -->
             <button onclick="toggleEStop()" id="globalEstopBtn" class="btn-estop" disabled>EMERGENCY STOP</button>
         </div>
 
@@ -189,12 +186,20 @@
                     <label>Z <input type="number" id="placeZ" value="-50" disabled></label>
                 </div>
 
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button id="addZoneBtn" onclick="addDropZone()" style="background: rgba(14, 165, 233, 0.1); color: var(--accent-cyan); border: 1px dashed var(--accent-cyan); padding: 8px;" disabled>➕ Add Drop Zone</button>
+                    <button id="clearZonesBtn" onclick="clearDropZones()" style="background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px dashed var(--danger); padding: 8px; width: 30%;" disabled>🗑️ Clear</button>
+                </div>
+
+                <div id="dropZoneListUI" style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted); background: rgba(15, 23, 42, 0.4); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); max-height: 140px; overflow-y: auto;">
+                    <em>No custom zones added. Will use default coordinate above.</em>
+                </div>
+
                 <button id="workflowBtn" class="btn-hybrid" onclick="executeHybridSequence()" disabled style="margin-top: 15px;">Execute Auto Workflow</button>
             </div>
         </div>
     </div>
 
-    <!-- MAIN VIEW AREA -->
     <div id="main-content">
         <div id="view-toggles">
             <button class="view-btn active" id="btnView3D" onclick="switchMainView('3d')">3D Digital Twin</button>
@@ -403,7 +408,6 @@
             );
         }
 
-        // Convert base Python coordinates so Three.js renders Y as up
         const R2T = new THREE.Matrix4().set(1,0,0,0, 0,0,1,0, 0,-1,0,0, 0,0,0,1);
 
         function renderArm(joints) {
@@ -529,7 +533,6 @@
                 appState = 'READY_TO_PICK'; 
                 updateUIState();
                 
-                // --- TELL PYTHON TO LOCK OUT ALL HARDWARE COMMS ---
                 await fetch('/set_simulation?state=true').catch(e=>{});
                 
                 document.getElementById('sysStatus').innerText = 'SIMULATION MODE';
@@ -545,7 +548,6 @@
                 appState = 'DISCONNECTED'; 
                 updateUIState();
                 
-                // --- TELL PYTHON TO RE-ALLOW HARDWARE COMMS ---
                 await fetch('/set_simulation?state=false').catch(e=>{});
                 
                 document.getElementById('btText').innerText = "Disconnected";
@@ -562,11 +564,17 @@
             const statusBadge = document.getElementById('sysStatus');
             const elementsToToggle = [
                 'pickX', 'pickY', 'pickZ', 'placeX', 'placeY', 'placeZ', 'manX', 'manY', 'manZ',
-                'workflowBtn', 'homeBtn', 'manualMoveBtn'
+                'workflowBtn', 'homeBtn', 'manualMoveBtn', 'addZoneBtn', 'clearZonesBtn'
             ];
             for(let i=1; i<=6; i++) { elementsToToggle.push(`q${i}`); elementsToToggle.push(`num${i}`); }
 
-            const setDisabled = (state) => elementsToToggle.forEach(id => document.getElementById(id).disabled = state);
+            const setDisabled = (state) => {
+                elementsToToggle.forEach(id => {
+                    let el = document.getElementById(id);
+                    if(el) el.disabled = state;
+                });
+                document.querySelectorAll('.zone-edit-input').forEach(el => el.disabled = state);
+            };
 
             if (appState === 'DISCONNECTED') {
                 statusBadge.className = 'status-badge status-idle'; statusBadge.innerText = 'System Offline';
@@ -615,6 +623,70 @@
         }, 800); 
 
         // ==============================================================================
+        // MULTIPLE DROP ZONE LOGIC (WITH LED INDICATOR EDITING)
+        // ==============================================================================
+        let customDropZones = [];
+        let currentDropIndex = 0;
+
+        function addDropZone() {
+            let x = parseFloat(document.getElementById('placeX').value);
+            let y = parseFloat(document.getElementById('placeY').value);
+            let z = parseFloat(document.getElementById('placeZ').value);
+            
+            customDropZones.push({x, y, z});
+            updateDropZoneUI();
+        }
+
+        function clearDropZones() {
+            customDropZones = [];
+            currentDropIndex = 0;
+            updateDropZoneUI();
+        }
+        
+        function editZone(index, axis, val) {
+            let parsedVal = parseFloat(val);
+            if (!isNaN(parsedVal)) {
+                customDropZones[index][axis] = parsedVal;
+            }
+        }
+
+        function updateDropZoneUI() {
+            let container = document.getElementById('dropZoneListUI');
+            if (customDropZones.length === 0) {
+                container.innerHTML = "<em>No custom zones added. Will use default coordinate above.</em>";
+                return;
+            }
+            
+            let html = "<div style='display: flex; flex-direction: column; gap: 8px;'>";
+            customDropZones.forEach((zone, index) => {
+                let isNext = (index === currentDropIndex) ? 
+                    "<div title='Next Target' style='width: 12px; height: 12px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); margin-left: 8px; flex-shrink: 0;'></div>" : 
+                    "<div style='width: 12px; height: 12px; border-radius: 50%; background: var(--border-color); margin-left: 8px; flex-shrink: 0;'></div>";
+                    
+                html += `
+                <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.2); padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <span style="font-weight: bold; color: var(--accent-cyan); font-size: 0.8rem; min-width: 45px;">Zone ${index + 1}:</span>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <span style="font-size: 0.75rem;">X</span>
+                        <input type="number" class="zone-edit-input" value="${zone.x}" onchange="editZone(${index}, 'x', this.value)" style="width: 45px !important; padding: 4px !important; font-size: 0.75rem; background: rgba(15, 23, 42, 0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
+                        <span style="font-size: 0.75rem;">Y</span>
+                        <input type="number" class="zone-edit-input" value="${zone.y}" onchange="editZone(${index}, 'y', this.value)" style="width: 45px !important; padding: 4px !important; font-size: 0.75rem; background: rgba(15, 23, 42, 0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
+                        <span style="font-size: 0.75rem;">Z</span>
+                        <input type="number" class="zone-edit-input" value="${zone.z}" onchange="editZone(${index}, 'z', this.value)" style="width: 45px !important; padding: 4px !important; font-size: 0.75rem; background: rgba(15, 23, 42, 0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
+                    </div>
+                    ${isNext}
+                </div>`;
+            });
+            html += "</div>";
+            container.innerHTML = html;
+            
+            // If the app is currently running/working, make sure new inputs get disabled immediately
+            if (appState === 'WORKING' || appState === 'ESTOPPED') {
+                document.querySelectorAll('.zone-edit-input').forEach(el => el.disabled = true);
+            }
+        }
+
+        // ==============================================================================
         // HARDWARE COMMS & THE MACRO PLAYER
         // ==============================================================================
         async function connectSerial() {
@@ -632,7 +704,6 @@
                 label.style.color = "var(--accent-purple)";
             }
             
-            // Re-allow physical writes if connecting normally
             await fetch('/set_simulation?state=false').catch(e=>{});
             
             btn.innerText = "Connecting..."; statusText.innerText = "Connecting..."; indicator.style.background = "#f59e0b";
@@ -649,7 +720,6 @@
         }
 
         function pushToHardware(q, sol = 0) {
-            // FRONTEND LOCK: Instantly block network requests to hardware when simulating
             if (isSimulation) return; 
             fetch(`/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}&sol=${sol}`, {
                 keepalive: true
@@ -657,7 +727,6 @@
         }
         
         function sendCommand(cmd) {
-            // FRONTEND LOCK: Stop relaying E-Stop / Conveyor commands when simulating
             if (isSimulation) return; 
             fetch(`/send_command?cmd=${cmd}`).catch(e=>{});
         }
@@ -761,9 +830,23 @@
             let px = parseFloat(document.getElementById('pickX').value);
             let py = parseFloat(document.getElementById('pickY').value);
             let pz = parseFloat(document.getElementById('pickZ').value);
-            let dx = parseFloat(document.getElementById('placeX').value);
-            let dy = parseFloat(document.getElementById('placeY').value);
-            let dz = parseFloat(document.getElementById('placeZ').value);
+            
+            let dx, dy, dz;
+
+            if (customDropZones.length > 0) {
+                let targetZone = customDropZones[currentDropIndex];
+                dx = targetZone.x;
+                dy = targetZone.y;
+                dz = targetZone.z;
+                
+                currentDropIndex = (currentDropIndex + 1) % customDropZones.length;
+                updateDropZoneUI(); 
+            } else {
+                dx = parseFloat(document.getElementById('placeX').value);
+                dy = parseFloat(document.getElementById('placeY').value);
+                dz = parseFloat(document.getElementById('placeZ').value);
+            }
+
             let cur = []; for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
 
             try {
