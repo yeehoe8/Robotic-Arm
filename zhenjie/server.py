@@ -160,21 +160,28 @@ def jacobian_ik(target_xyz, start_thetas, max_iter=50, tol=1e-4):
 def constraint_vertical(thetas):
     return (thetas[2] + thetas[4]) - np.radians(-90.0)
 
-def objective_strict(thetas, target_xyz):
-    T, _ = build_dh_chain(thetas)
-    return np.sum((T[:3, 3] - target_xyz)**2) + (thetas[3]**2 + thetas[5]**2) * 50000.0
-
-def objective_relaxed(thetas, target_xyz):
-    T, _ = build_dh_chain(thetas)
-    pos_error = np.sum((T[:3, 3] - target_xyz)**2) * 1000.0
-    pitch_error = abs((thetas[2] + thetas[4]) - np.radians(-90.0)) * 100.0
-    return pos_error + pitch_error + (thetas[3]**2 + thetas[5]**2) * 10.0
-
 def find_best_ik(target_xyz, current_angles):
-    guesses = [np.radians(current_angles), np.radians([0, 45, -20, 0, -70, 0]), np.radians([0, 60, -40, 0, -50, 0])]
+    # FIX: Smart trigonometry guess prevents the IK Solver from getting stuck in Local Minima
+    q1_guess = np.arctan2(target_xyz[1], target_xyz[0])
+    
+    guesses = [
+        np.radians(current_angles), 
+        [q1_guess, np.radians(45), np.radians(-20), 0, np.radians(-70), 0], 
+        [q1_guess, np.radians(60), np.radians(-40), 0, np.radians(-50), 0]
+    ]
     best_res, best_err = None, float('inf')
     con = {'type': 'eq', 'fun': constraint_vertical}
     
+    def objective_strict(thetas, target_xyz):
+        T, _ = build_dh_chain(thetas)
+        return np.sum((T[:3, 3] - target_xyz)**2) + (thetas[3]**2 + thetas[5]**2) * 50000.0
+
+    def objective_relaxed(thetas, target_xyz):
+        T, _ = build_dh_chain(thetas)
+        pos_error = np.sum((T[:3, 3] - target_xyz)**2) * 1000.0
+        pitch_error = abs((thetas[2] + thetas[4]) - np.radians(-90.0)) * 100.0
+        return pos_error + pitch_error + (thetas[3]**2 + thetas[5]**2) * 10.0
+        
     for guess in guesses:
         res = minimize(objective_strict, guess, args=(target_xyz,), method='SLSQP', bounds=BOUNDS, constraints=[con], options={'ftol': 1e-4, 'maxiter': 50})
         err = np.linalg.norm(build_dh_chain(res.x)[0][:3, 3] - target_xyz)
@@ -217,15 +224,9 @@ def calculate_ik(
 
     def calc_home_frames(start_angles, label, sol):
         target = [0.0] * 6
-        
-        # Determine the maximum angular distance any joint has to travel to reach 0
         max_delta = np.max(np.abs(np.array(target) - np.array(start_angles)))
-        
-        # Calculate dynamic time required to respect the 35 deg/s speed limit
         T = max(1.5, max_delta / 35.0)  
         tau = np.linspace(0, 1.0, int(T * 30))
-        
-        # Apply strict Quintic Polynomial S-Curve mapping
         s_tau = 10*(tau**3) - 15*(tau**4) + 6*(tau**5)
         
         frames = []
@@ -238,7 +239,8 @@ def calculate_ik(
 
     def calc_ptp_frames(start_angles, target_xyz, label, sol):
         best_res, best_err = find_best_ik(target_xyz, start_angles)
-        if best_res is None or best_err > 25.0: return None, start_angles
+        if best_res is None or best_err > 10.0: return None, start_angles
+        
         target_angles_deg = np.degrees(best_res.x)
         max_delta = np.max(np.abs(target_angles_deg - np.array(start_angles)))
         T = max(1.5, max_delta / 35.0)  
@@ -258,7 +260,7 @@ def calculate_ik(
         if dist < 1.0: return calc_delay_frames(start_angles, 33, label, sol)
 
         best_res, best_err = find_best_ik(target_xyz, start_angles)
-        if best_err > 25.0: return None, start_angles
+        if best_err > 10.0: return None, start_angles
 
         T = max(1.0, dist / 35.0)  
         tau = np.linspace(0, 1.0, int(T * 30))
@@ -295,18 +297,17 @@ def calculate_ik(
     current = [cur1, cur2, cur3, cur4, cur5, cur6]
     frames = []
 
-    # Get current Cartesian coordinates to calculate Departure vectors
     T_start, _ = build_dh_chain(np.radians(current))
     current_xyz = T_start[:3, 3]
-    departure_z = current_xyz[2] + 100.0 
 
     # ROUTE 1: HOME MACRO
     if mode == "macro_home":
-        # 1. LIN Extract to safe clearance before swinging home
-        f, current = calc_lin_frames(current, [current_xyz[0], current_xyz[1], departure_z], "LIN (EXTRACT)", 0)
-        if f: frames.extend(f)
+        # FIX: Only extract if we are down near the table.
+        if current_xyz[2] < 300.0:
+            extract_z = current_xyz[2] + 100.0 
+            f, current = calc_lin_frames(current, [current_xyz[0], current_xyz[1], extract_z], "LIN (EXTRACT)", 0)
+            if f: frames.extend(f)
 
-        # 2. PTP Swing to Home
         f, current = calc_home_frames(current, "PTP (HOMING)", 0)
         frames.extend(f)
         
@@ -314,72 +315,63 @@ def calculate_ik(
 
     # ROUTE 2: MANUAL POINT-TO-POINT + PLUNGE MACRO
     elif mode == "macro_manual":
-        hover_z = z + 100.0
+        clearance_z = z + 100.0
 
-        # 1. LIN Extract to safe clearance from current position
-        f, current = calc_lin_frames(current, [current_xyz[0], current_xyz[1], departure_z], "LIN (EXTRACT)", 0)
-        if f: frames.extend(f)
+        # FIX: Only extract if we are down near the table. Prevent drawing impossible vertical lines from Home.
+        if current_xyz[2] < 300.0:
+            extract_z = max(current_xyz[2] + 100.0, clearance_z)
+            f, current = calc_lin_frames(current, [current_xyz[0], current_xyz[1], extract_z], "LIN (EXTRACT)", 0)
+            if f: frames.extend(f)
 
-        # 2. PTP Transfer to Target Hover
-        f, current = calc_ptp_frames(current, [x, y, hover_z], "PTP (TRANSFER)", 0)
+        f, current = calc_ptp_frames(current, [x, y, clearance_z], "PTP (TRANSFER)", 0)
         if not f: return {"status": "failed"}
         frames.extend(f)
 
-        # 3. LIN Plunge down to Target
         f, current = calc_lin_frames(current, [x, y, z], "LIN (PLUNGE)", 0)
         if not f: return {"status": "failed"}
         frames.extend(f)
 
-        # The arm safely stays at the plunged target coordinate!
         return {"status": "success", "frames": frames}
 
     # ROUTE 3: FULL AUTO PICK-AND-PLACE MACRO
     elif mode == "macro_auto":
-        hover_z = max(pz, dz) + 100.0
+        clearance_z = max(pz, dz) + 100.0
 
-        # Safe extraction before starting auto workflow if arm was plunged manually
-        f, current = calc_lin_frames(current, [current_xyz[0], current_xyz[1], departure_z], "LIN (EXTRACT)", 0)
-        if f: frames.extend(f)
+        if current_xyz[2] < 300.0:
+            extract_z = max(current_xyz[2] + 100.0, clearance_z)
+            f, current = calc_lin_frames(current, [current_xyz[0], current_xyz[1], extract_z], "LIN (EXTRACT)", 0)
+            if f: frames.extend(f)
 
-        # 1. PTP to Hover over Pick
-        f, current = calc_ptp_frames(current, [px, py, hover_z], "PTP (TRANSFER)", 0)
+        f, current = calc_ptp_frames(current, [px, py, clearance_z], "PTP (TRANSFER)", 0)
         if not f: return {"status": "failed"}
         frames.extend(f)
 
-        # 2. LIN Plunge down to Object
         f, current = calc_lin_frames(current, [px, py, pz], "LIN (PLUNGE)", 0)
         if not f: return {"status": "failed"}
         frames.extend(f)
 
-        # 3. Delay & Turn SUCK ON (sol=1)
         f, current = calc_delay_frames(current, 600, "LIN (GRAB)", 1)
         frames.extend(f)
 
-        # 4. LIN Extract Object (sol=1)
-        f, current = calc_lin_frames(current, [px, py, hover_z], "LIN (EXTRACT)", 1)
+        f, current = calc_lin_frames(current, [px, py, clearance_z], "LIN (EXTRACT)", 1)
         if not f: return {"status": "failed"}
         frames.extend(f)
 
-        # 5. PTP Transfer to Drop Zone (sol=1)
-        f, current = calc_ptp_frames(current, [dx, dy, hover_z], "PTP (TRANSFER)", 1)
+        f, current = calc_ptp_frames(current, [dx, dy, clearance_z], "PTP (TRANSFER)", 1)
         if not f: return {"status": "failed"}
         frames.extend(f)
 
-        # 6. LIN Plunge into Box (sol=1)
         f, current = calc_lin_frames(current, [dx, dy, dz], "LIN (PLACE)", 1)
         if not f: return {"status": "failed"}
         frames.extend(f)
 
-        # 7. Delay & Turn SUCK OFF (sol=0)
         f, current = calc_delay_frames(current, 500, "LIN (RELEASE)", 0)
         frames.extend(f)
 
-        # 8. LIN Extract Empty (sol=0)
-        f, current = calc_lin_frames(current, [dx, dy, hover_z], "LIN (EXTRACT)", 0)
+        f, current = calc_lin_frames(current, [dx, dy, clearance_z], "LIN (EXTRACT)", 0)
         if not f: return {"status": "failed"}
         frames.extend(f)
 
-        # 9. Return to base (sol=0)
         f, current = calc_home_frames(current, "PTP (HOMING)", 0)
         frames.extend(f)
 
