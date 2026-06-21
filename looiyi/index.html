@@ -195,7 +195,7 @@
                     <em>No custom zones added. Will use default coordinate above.</em>
                 </div>
 
-                <button id="workflowBtn" class="btn-hybrid" onclick="executeHybridSequence()" disabled style="margin-top: 15px;">Execute Auto Workflow</button>
+                <button id="workflowBtn" class="btn-hybrid" onclick="toggleAutoBatch()" disabled style="margin-top: 15px;">Start Auto Batch</button>
             </div>
         </div>
     </div>
@@ -488,6 +488,7 @@
         let appState = 'DISCONNECTED'; 
         let isSimulation = false;
         let isEStop = false;
+        let isAutoBatchActive = false;
 
         function toggleEStop() {
             let btn = document.getElementById('globalEstopBtn');
@@ -495,6 +496,8 @@
                 isEStop = true;
                 sendCommand('ESTOP');
                 appState = 'ESTOPPED';
+                isAutoBatchActive = false; // Kill batch on E-Stop
+                updateDropZoneUI();
                 updateUIState();
                 
                 btn.innerText = "RESET SYSTEM";
@@ -544,6 +547,7 @@
                 label.style.color = "var(--danger)";
             } else {
                 isSimulation = false; 
+                isAutoBatchActive = false; // Disable batch if leaving simulation
                 if (checkbox) checkbox.checked = false; 
                 appState = 'DISCONNECTED'; 
                 updateUIState();
@@ -560,11 +564,36 @@
             }
         }
 
+        function toggleAutoBatch() {
+            if (customDropZones.length === 0) {
+                alert("Please add at least one drop zone to start the Auto Batch.");
+                return;
+            }
+            isAutoBatchActive = true;
+            currentDropIndex = 0;
+            updateDropZoneUI();
+            
+            if (appState === 'READY_TO_PICK') {
+                executeHybridSequence();
+            } else {
+                appState = 'WAITING_FOR_OBJ';
+                sendCommand('RESUME');
+                updateUIState();
+            }
+        }
+
+        function stopAutoBatch() {
+            isAutoBatchActive = false;
+            currentDropIndex = 0;
+            updateDropZoneUI();
+            updateUIState();
+        }
+
         function updateUIState() {
             const statusBadge = document.getElementById('sysStatus');
             const elementsToToggle = [
                 'pickX', 'pickY', 'pickZ', 'placeX', 'placeY', 'placeZ', 'manX', 'manY', 'manZ',
-                'workflowBtn', 'homeBtn', 'manualMoveBtn', 'addZoneBtn', 'clearZonesBtn'
+                'homeBtn', 'manualMoveBtn'
             ];
             for(let i=1; i<=6; i++) { elementsToToggle.push(`q${i}`); elementsToToggle.push(`num${i}`); }
 
@@ -573,13 +602,39 @@
                     let el = document.getElementById(id);
                     if(el) el.disabled = state;
                 });
-                document.querySelectorAll('.zone-edit-input').forEach(el => el.disabled = state);
+                
+                let zoneLock = state || isAutoBatchActive;
+                document.getElementById('addZoneBtn').disabled = zoneLock;
+                document.getElementById('clearZonesBtn').disabled = zoneLock;
+                document.querySelectorAll('.zone-edit-input').forEach(el => el.disabled = zoneLock);
+            };
+
+            const wBtn = document.getElementById('workflowBtn');
+            const updateWorkflowBtn = (forceDisable = false) => {
+                if (!wBtn) return;
+                if (forceDisable) {
+                    wBtn.disabled = true;
+                    return;
+                }
+                
+                if (isAutoBatchActive) {
+                    wBtn.innerText = "🛑 Stop Auto Batch";
+                    wBtn.style.background = "var(--danger)";
+                    wBtn.onclick = stopAutoBatch;
+                    wBtn.disabled = false; 
+                } else {
+                    wBtn.innerText = "Start Auto Batch";
+                    wBtn.style.background = ""; 
+                    wBtn.onclick = toggleAutoBatch;
+                    wBtn.disabled = false;
+                }
             };
 
             if (appState === 'DISCONNECTED') {
                 statusBadge.className = 'status-badge status-idle'; statusBadge.innerText = 'System Offline';
                 statusBadge.style = "";
                 setDisabled(true);
+                updateWorkflowBtn(true);
                 document.getElementById('globalEstopBtn').disabled = true;
             } 
             else if (appState === 'ESTOPPED') {
@@ -589,6 +644,7 @@
                 statusBadge.style.border = '1px solid #ef4444';
                 statusBadge.innerText = 'SYSTEM HALTED (E-STOP)';
                 setDisabled(true);
+                updateWorkflowBtn(true);
                 document.getElementById('globalEstopBtn').disabled = false;
             }
             else {
@@ -596,21 +652,29 @@
                 document.getElementById('globalEstopBtn').disabled = false;
 
                 if (appState === 'WAITING_FOR_OBJ') {
-                    statusBadge.className = 'status-badge status-running'; statusBadge.innerText = 'Conveyor Running. Waiting...';
+                    statusBadge.className = 'status-badge status-running'; 
+                    statusBadge.innerText = isAutoBatchActive ? 'AUTO BATCH: Waiting for Object...' : 'Conveyor Running. Waiting...';
                     setDisabled(false);
-                    document.getElementById('pickX').disabled = true; document.getElementById('pickY').disabled = true; document.getElementById('pickZ').disabled = true;
-                    document.getElementById('placeX').disabled = true; document.getElementById('placeY').disabled = true; document.getElementById('placeZ').disabled = true;
-                    document.getElementById('workflowBtn').disabled = true;
+                    updateWorkflowBtn(false);
                 } else if (appState === 'READY_TO_PICK') {
-                    statusBadge.className = 'status-badge status-detect'; statusBadge.innerText = isSimulation ? 'SIMULATION MODE' : 'Object Detected! Ready.';
+                    statusBadge.className = 'status-badge status-detect'; 
+                    statusBadge.innerText = isSimulation ? 'SIMULATION MODE' : 'Object Detected! Ready.';
                     setDisabled(false);
+                    updateWorkflowBtn(false);
                 } else if (appState === 'WORKING') {
-                    statusBadge.className = 'status-badge status-working'; statusBadge.innerText = 'Executing Macro Trajectory...';
+                    statusBadge.className = 'status-badge status-working'; 
+                    statusBadge.innerText = isAutoBatchActive ? `AUTO BATCH: Moving to Zone ${currentDropIndex + 1}` : 'Executing Macro Trajectory...';
                     setDisabled(true);
+                    if (isAutoBatchActive) {
+                        updateWorkflowBtn(false); 
+                    } else {
+                        updateWorkflowBtn(true);
+                    }
                 }
             }
         }
 
+        // Background Polling Logic
         setInterval(async () => {
             if (appState !== 'WAITING_FOR_OBJ' || isSimulation || isEStop) return; 
             try {
@@ -618,6 +682,9 @@
                 let data = await res.json();
                 if(data.status === "success" && data.message === "OBJ_DETECTED") {
                     appState = 'READY_TO_PICK'; updateUIState();
+                    if (isAutoBatchActive) {
+                        setTimeout(executeHybridSequence, 400); // 400ms delay to let hardware settle
+                    }
                 }
             } catch(e) {}
         }, 800); 
@@ -680,8 +747,7 @@
             html += "</div>";
             container.innerHTML = html;
             
-            // If the app is currently running/working, make sure new inputs get disabled immediately
-            if (appState === 'WORKING' || appState === 'ESTOPPED') {
+            if (appState === 'WORKING' || appState === 'ESTOPPED' || isAutoBatchActive) {
                 document.querySelectorAll('.zone-edit-input').forEach(el => el.disabled = true);
             }
         }
@@ -698,6 +764,7 @@
             let label = document.getElementById('simToggleLabel');
             
             isSimulation = false; 
+            isAutoBatchActive = false;
             if (checkbox) checkbox.checked = false;
             if (label) {
                 label.innerText = "Simulation Mode: OFF";
@@ -775,7 +842,7 @@
                             if (currentFrame >= frames.length) {
                                 clearInterval(macroTimer);
                                 document.getElementById('moveMode').innerText = "IDLE";
-                                if (data.trigger_resume && !isEStop) sendCommand('RESUME');
+                                if (data.trigger_resume && !isEStop && !isSimulation) sendCommand('RESUME');
                                 resolve(); 
                                 return; 
                             }
@@ -838,9 +905,6 @@
                 dx = targetZone.x;
                 dy = targetZone.y;
                 dz = targetZone.z;
-                
-                currentDropIndex = (currentDropIndex + 1) % customDropZones.length;
-                updateDropZoneUI(); 
             } else {
                 dx = parseFloat(document.getElementById('placeX').value);
                 dy = parseFloat(document.getElementById('placeY').value);
@@ -851,14 +915,35 @@
 
             try {
                 await executeMacro(`/inverse_kinematics?mode=macro_auto&px=${px}&py=${py}&pz=${pz}&dx=${dx}&dy=${dy}&dz=${dz}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
+                
+                // Advance Queue on Success
+                if (customDropZones.length > 0 && !isEStop) {
+                    currentDropIndex++;
+                    if (currentDropIndex >= customDropZones.length) {
+                        isAutoBatchActive = false;
+                        currentDropIndex = 0;
+                    }
+                    updateDropZoneUI();
+                }
+
             } catch (error) {
                 if (!isEStop) {
                     alert("Sequence Aborted: Target Coordinate or Hover Coordinate exceeds physical reach constraints.");
                     document.getElementById('moveMode').innerText = "ERROR";
+                    isAutoBatchActive = false; // Abort batch on error
+                    updateDropZoneUI();
                 }
             }
             
-            if (!isEStop) { appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState(); }
+            if (!isEStop) { 
+                appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; 
+                updateUIState(); 
+                
+                // Automatic looping for Simulation Mode
+                if (isAutoBatchActive && isSimulation) {
+                    setTimeout(executeHybridSequence, 1000);
+                }
+            }
         }
 
         async function init3DViewer() {
