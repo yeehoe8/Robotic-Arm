@@ -4,7 +4,7 @@
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
 // --- HARDWARE CONTROL PINS ---
-const int irSensorPin = 13;     // IR Sensor input
+const int irSensorPin = 13;    // IR Sensor input
 const int conveyorPin = 4;     // Relay for Conveyor Belt
 const int suckMotorPin = 6;    // Relay for Suction Pump
 
@@ -24,7 +24,10 @@ boolean stringComplete = false;
 // --- EDGE-SIDE SMOOTHING INTERPOLATOR ---
 float currentSmoothedPWM[6] = {324, 319, 131, 287, 299, 307};
 int targetPWM[6] = {324, 319, 131, 287, 299, 307};
-float smoothingFactor = 0.3; // Low-pass physical filter. Lower = smoother but slightly delayed
+float smoothingFactor = 0.4; // 0.4 at 50Hz provides excellent shock-absorption without lagging behind
+
+unsigned long lastInterpolateTime = 0;
+const unsigned long interpolateInterval = 20; // 50Hz update rate (20ms)
 
 void setup() {
   // High-speed 115200 baud is required to catch Python's 30FPS trajectory stream
@@ -166,12 +169,18 @@ void loop() {
   }
 
   // ==========================================
-  // 4. HIGH-SPEED PWM INTERPOLATOR (Runs Uninterrupted)
+  // 4. TIMED HARDWARE LOW-PASS FILTER
   // ==========================================
-  for(int j = 0; j < 6; j++) {
-      if (abs(currentSmoothedPWM[j] - targetPWM[j]) > 0.5) {
-          currentSmoothedPWM[j] += (targetPWM[j] - currentSmoothedPWM[j]) * smoothingFactor;
-          pwm.setPWM(j, 0, (int)currentSmoothedPWM[j]);
+  // Evaluate exactly every 20ms to match 50Hz physical servo limits
+  if (millis() - lastInterpolateTime >= interpolateInterval) {
+      lastInterpolateTime = millis();
+      
+      for(int j = 0; j < 6; j++) {
+          // Only update if there is a meaningful difference
+          if (abs(currentSmoothedPWM[j] - targetPWM[j]) > 0.1) {
+              currentSmoothedPWM[j] += (targetPWM[j] - currentSmoothedPWM[j]) * smoothingFactor;
+              pwm.setPWM(j, 0, (int)currentSmoothedPWM[j]);
+          }
       }
   }
 }
