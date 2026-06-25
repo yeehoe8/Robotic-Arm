@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import numpy as np
 from scipy.optimize import minimize
-from scipy.signal import butter, filtfilt
 import serial
 import asyncio
 import time
@@ -201,17 +200,22 @@ def set_hardware(q1: float, q2: float, q3: float, q4: float, q5: float, q6: floa
     system_state["joints"] = points
     system_state["matrices"] = matrices
     
-    current_time = time.time()
-    dt = current_time - last_telemetry_time
-    if dt < 0.01: dt = 0.02
+    # Mathematical Decoupling for perfectly smooth Simulation charting
+    if SIMULATION_MODE:
+        dt = 0.02
+        current_time = last_telemetry_time + 0.02
+    else:
+        current_time = time.time()
+        dt = current_time - last_telemetry_time
+        if dt < 0.01: dt = 0.02
 
     current_pos = np.array(points[-1])
     raw_vel = (current_pos - last_telemetry_pos) / dt
-    alpha_v = 0.10 
+    alpha_v = 0.15 
     smoothed_vel = (alpha_v * raw_vel) + ((1 - alpha_v) * last_telemetry_vel)
 
     raw_acc = (smoothed_vel - last_telemetry_vel) / dt
-    alpha_a = 0.05 
+    alpha_a = 0.08 
     smoothed_acc = (alpha_a * raw_acc) + ((1 - alpha_a) * np.array(system_state["acceleration"]))
 
     current_angles = np.array(angles)
@@ -337,12 +341,17 @@ async def macro_player(frames, trigger_resume=False):
             except Exception:
                 pass
 
-        current_time = time.time()
-        dt = current_time - last_telemetry_time
-        if dt < 0.01: dt = 0.02 
+        # Mathematical Decoupling for perfectly smooth Simulation charting
+        if SIMULATION_MODE:
+            dt = 0.02
+            current_time = last_telemetry_time + 0.02
+        else:
+            current_time = time.time()
+            dt = current_time - last_telemetry_time
+            if dt < 0.01: dt = 0.02 
         
-        alpha_v = 0.10 
-        alpha_a = 0.05 
+        alpha_v = 0.15 
+        alpha_a = 0.08 
 
         current_pos = np.array(frame["joints"][-1])
         raw_vel = (current_pos - last_telemetry_pos) / dt
@@ -403,7 +412,6 @@ def calculate_ik(
 
     def calc_home_frames(start_angles, label, sol):
         target = [0.0] * 6
-        # --- APPLIED DYNAMIC TIME SCALING (WEIGHTS) ---
         weights = np.array([1.0, 1.2, 1.2, 0.5, 0.5, 0.5])
         max_delta = np.max(np.abs(np.array(target) - np.array(start_angles)) * weights)
         T = max(1.5, max_delta / 35.0)  
@@ -423,7 +431,6 @@ def calculate_ik(
         if best_res is None or best_err > 25.0: return None, start_angles
         
         target_angles_deg = np.degrees(best_res.x)
-        # --- APPLIED DYNAMIC TIME SCALING (WEIGHTS) ---
         weights = np.array([1.0, 1.2, 1.2, 0.5, 0.5, 0.5])
         max_delta = np.max(np.abs(target_angles_deg - np.array(start_angles)) * weights)
         T = max(1.5, max_delta / 35.0)  
