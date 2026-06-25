@@ -1,10 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import numpy as np
 from scipy.optimize import minimize
 from scipy.signal import butter, filtfilt
 import serial
+import asyncio
+import time
 
 app = FastAPI()
 
@@ -30,6 +32,29 @@ BOUNDS = [
 
 usb_serial = None
 serial_buffer = ""
+SIMULATION_MODE = False
+
+# ==============================================================================
+# GLOBAL SYSTEM STATE (Single Source of Truth)
+# ==============================================================================
+system_state = {
+    "angles": [0.0] * 6,
+    "joints": [[0.0, 0.0, 0.0]] * 7,
+    "matrices": [],
+    "velocity": [0.0, 0.0, 0.0],
+    "acceleration": [0.0, 0.0, 0.0],
+    "joint_velocity": [0.0] * 6,
+    "joint_acceleration": [0.0] * 6,
+    "status": "IDLE", 
+    "solenoid": 0
+}
+
+last_telemetry_time = time.time()
+last_telemetry_pos = np.zeros(3)
+last_telemetry_vel = np.zeros(3)
+
+last_telemetry_angles = np.zeros(6)
+last_telemetry_joint_vel = np.zeros(6)
 
 def map_val(x, in_min, in_max, out_min, out_max):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
@@ -55,6 +80,12 @@ def get_calibrated_pwm(joint_idx, angle):
         else:          return int(map_val(angle, 0.0, -90.0, 307.0, 104.5))
     return 300 
 
+@app.get("/set_simulation")
+def set_simulation(state: bool):
+    global SIMULATION_MODE
+    SIMULATION_MODE = state
+    return {"status": "success", "simulation_mode": SIMULATION_MODE}
+
 @app.get("/connect_serial")
 def connect_serial(port: str):
     global usb_serial
@@ -68,7 +99,22 @@ def connect_serial(port: str):
 
 @app.get("/send_command")
 def send_command(cmd: str):
-    global usb_serial
+    global usb_serial, SIMULATION_MODE, system_state, last_telemetry_vel, last_telemetry_joint_vel
+    
+    if cmd == "ESTOP":
+        system_state["status"] = "ESTOPPED"
+        system_state["velocity"] = [0.0, 0.0, 0.0]
+        system_state["acceleration"] = [0.0, 0.0, 0.0]
+        system_state["joint_velocity"] = [0.0] * 6
+        system_state["joint_acceleration"] = [0.0] * 6
+        last_telemetry_vel = np.zeros(3)
+        last_telemetry_joint_vel = np.zeros(6)
+    elif cmd == "RESET":
+        system_state["status"] = "IDLE"
+        
+    if SIMULATION_MODE:
+        return {"status": "simulated"}  
+        
     if usb_serial and usb_serial.is_open:
         usb_serial.write(f"<{cmd}>".encode('utf-8'))
         return {"status": "success"}
@@ -76,7 +122,10 @@ def send_command(cmd: str):
 
 @app.get("/check_status")
 def check_status():
-    global usb_serial, serial_buffer
+    global usb_serial, serial_buffer, SIMULATION_MODE
+    if SIMULATION_MODE:
+        return {"status": "simulated"}  
+
     if usb_serial and usb_serial.is_open:
         try:
             if usb_serial.in_waiting > 0:
@@ -91,15 +140,20 @@ def check_status():
             pass
     return {"status": "empty"}
 
-@app.get("/set_hardware")
-def set_hardware(q1: float, q2: float, q3: float, q4: float, q5: float, q6: float, sol: int = 0):
-    global usb_serial
-    if usb_serial and usb_serial.is_open:
-        pwms = [str(max(80, min(600, get_calibrated_pwm(i, q)))) for i, q in enumerate([q1, q2, q3, q4, q5, q6])]
-        pwms.append(str(sol))
-        usb_serial.write(("<" + ",".join(pwms) + ">").encode('utf-8'))
-        return {"status": "success"}
-    return {"status": "failed"}
+@app.get("/telemetry")
+def get_telemetry():
+    global system_state, last_telemetry_time, last_telemetry_vel, last_telemetry_joint_vel
+    
+    # Auto-Decay: Snap all graphs to zero when motion physically stops
+    if time.time() - last_telemetry_time > 0.15:
+        system_state["velocity"] = [0.0, 0.0, 0.0]
+        system_state["acceleration"] = [0.0, 0.0, 0.0]
+        system_state["joint_velocity"] = [0.0] * 6
+        system_state["joint_acceleration"] = [0.0] * 6
+        last_telemetry_vel = np.zeros(3)
+        last_telemetry_joint_vel = np.zeros(6)
+        
+    return system_state
 
 def dh_matrix(a, alpha, d, theta):
     return np.array([
@@ -121,21 +175,81 @@ def build_dh_chain(thetas):
     
     T_current = np.eye(4)
     points = [[0.0, 0.0, 0.0]]
+    matrices = [T_current.tolist()]
     for param in dh_params:
         T_current = T_current @ dh_matrix(*param)
         points.append([float(T_current[0,3]), float(T_current[1,3]), float(T_current[2,3])])
-    return T_current, points
+        matrices.append(T_current.tolist())
+    return T_current, points, matrices
 
-@app.get("/kinematics")
-def get_kinematics(q1: float, q2: float, q3: float, q4: float, q5: float, q6: float):
-    _, points = build_dh_chain(np.radians([q1, q2, q3, q4, q5, q6]))
-    return {"status": "success", "joints": points}
+_, initial_points, initial_matrices = build_dh_chain(np.radians([0,0,0,0,0,0]))
+system_state["joints"] = initial_points
+system_state["matrices"] = initial_matrices
+last_telemetry_pos = np.array(initial_points[-1])
+last_telemetry_angles = np.zeros(6)
+
+@app.get("/set_hardware")
+def set_hardware(q1: float, q2: float, q3: float, q4: float, q5: float, q6: float, sol: int = 0):
+    global usb_serial, SIMULATION_MODE, system_state
+    global last_telemetry_time, last_telemetry_pos, last_telemetry_vel
+    global last_telemetry_angles, last_telemetry_joint_vel
+    
+    angles = [q1, q2, q3, q4, q5, q6]
+    _, points, matrices = build_dh_chain(np.radians(angles))
+    
+    system_state["angles"] = angles
+    system_state["joints"] = points
+    system_state["matrices"] = matrices
+    
+    current_time = time.time()
+    dt = current_time - last_telemetry_time
+    if dt < 0.01: dt = 0.02
+
+    current_pos = np.array(points[-1])
+    raw_vel = (current_pos - last_telemetry_pos) / dt
+    alpha_v = 0.10 
+    smoothed_vel = (alpha_v * raw_vel) + ((1 - alpha_v) * last_telemetry_vel)
+
+    raw_acc = (smoothed_vel - last_telemetry_vel) / dt
+    alpha_a = 0.05 
+    smoothed_acc = (alpha_a * raw_acc) + ((1 - alpha_a) * np.array(system_state["acceleration"]))
+
+    current_angles = np.array(angles)
+    raw_jvel = (current_angles - last_telemetry_angles) / dt
+    smoothed_jvel = (alpha_v * raw_jvel) + ((1 - alpha_v) * last_telemetry_joint_vel)
+    
+    raw_jacc = (smoothed_jvel - last_telemetry_joint_vel) / dt
+    smoothed_jacc = (alpha_a * raw_jacc) + ((1 - alpha_a) * np.array(system_state["joint_acceleration"]))
+
+    system_state["velocity"] = smoothed_vel.tolist()
+    system_state["acceleration"] = smoothed_acc.tolist()
+    system_state["joint_velocity"] = smoothed_jvel.tolist()
+    system_state["joint_acceleration"] = smoothed_jacc.tolist()
+
+    last_telemetry_pos = current_pos
+    last_telemetry_vel = smoothed_vel
+    last_telemetry_angles = current_angles
+    last_telemetry_joint_vel = smoothed_jvel
+    last_telemetry_time = current_time
+
+    if SIMULATION_MODE:
+        return {"status": "simulated"}  
+        
+    if usb_serial and usb_serial.is_open:
+        pwms = [str(max(80, min(600, get_calibrated_pwm(i, q)))) for i, q in enumerate(angles)]
+        pwms.append(str(sol))
+        try:
+            usb_serial.write(("<" + ",".join(pwms) + ">").encode('utf-8'))
+        except Exception:
+            pass
+        return {"status": "success"}
+    return {"status": "failed"}
 
 def jacobian_ik(target_xyz, start_thetas, max_iter=50, tol=1e-4):
     thetas = np.copy(start_thetas)
     damping = 0.05 
     for step in range(max_iter):
-        T_cur, _ = build_dh_chain(thetas)
+        T_cur, _, _ = build_dh_chain(thetas)
         pos_cur = T_cur[:3, 3]
         error_pos = target_xyz - pos_cur
         error_pitch = np.radians(-90.0) - (thetas[2] + thetas[4])
@@ -161,9 +275,7 @@ def constraint_vertical(thetas):
     return (thetas[2] + thetas[4]) - np.radians(-90.0)
 
 def find_best_ik(target_xyz, current_angles):
-    # FIX: Smart trigonometry guess prevents the IK Solver from getting stuck in Local Minima
     q1_guess = np.arctan2(target_xyz[1], target_xyz[0])
-    
     guesses = [
         np.radians(current_angles), 
         [q1_guess, np.radians(45), np.radians(-20), 0, np.radians(-70), 0], 
@@ -173,11 +285,11 @@ def find_best_ik(target_xyz, current_angles):
     con = {'type': 'eq', 'fun': constraint_vertical}
     
     def objective_strict(thetas, target_xyz):
-        T, _ = build_dh_chain(thetas)
+        T, _, _ = build_dh_chain(thetas)
         return np.sum((T[:3, 3] - target_xyz)**2) + (thetas[3]**2 + thetas[5]**2) * 50000.0
 
     def objective_relaxed(thetas, target_xyz):
-        T, _ = build_dh_chain(thetas)
+        T, _, _ = build_dh_chain(thetas)
         pos_error = np.sum((T[:3, 3] - target_xyz)**2) * 1000.0
         pitch_error = abs((thetas[2] + thetas[4]) - np.radians(-90.0)) * 100.0
         return pos_error + pitch_error + (thetas[3]**2 + thetas[5]**2) * 10.0
@@ -200,25 +312,92 @@ def find_best_ik(target_xyz, current_angles):
             
     return best_res, best_err
 
-# ==============================================================================
-# SINGLE MASTER API ROUTER (Self-Contained)
-# ==============================================================================
+async def macro_player(frames, trigger_resume=False):
+    global system_state, usb_serial, SIMULATION_MODE
+    global last_telemetry_time, last_telemetry_pos, last_telemetry_vel
+    global last_telemetry_angles, last_telemetry_joint_vel
+
+    system_state["status"] = "MOVING"
+    last_telemetry_time = time.time()
+
+    for frame in frames:
+        if system_state["status"] == "ESTOPPED":
+            break
+
+        system_state["angles"] = frame["angles"]
+        system_state["joints"] = frame["joints"]
+        system_state["matrices"] = frame["matrices"]
+        sol = frame.get("sol", 0)
+
+        if not SIMULATION_MODE and usb_serial and usb_serial.is_open:
+            pwms = [str(max(80, min(600, get_calibrated_pwm(i, q)))) for i, q in enumerate(frame["angles"])]
+            pwms.append(str(sol))
+            try:
+                usb_serial.write(("<" + ",".join(pwms) + ">").encode('utf-8'))
+            except Exception:
+                pass
+
+        current_time = time.time()
+        dt = current_time - last_telemetry_time
+        if dt < 0.01: dt = 0.02 
+        
+        alpha_v = 0.10 
+        alpha_a = 0.05 
+
+        current_pos = np.array(frame["joints"][-1])
+        raw_vel = (current_pos - last_telemetry_pos) / dt
+        smoothed_vel = (alpha_v * raw_vel) + ((1 - alpha_v) * last_telemetry_vel)
+        raw_acc = (smoothed_vel - last_telemetry_vel) / dt
+        smoothed_acc = (alpha_a * raw_acc) + ((1 - alpha_a) * np.array(system_state["acceleration"]))
+
+        current_angles = np.array(frame["angles"])
+        raw_jvel = (current_angles - last_telemetry_angles) / dt
+        smoothed_jvel = (alpha_v * raw_jvel) + ((1 - alpha_v) * last_telemetry_joint_vel)
+        raw_jacc = (smoothed_jvel - last_telemetry_joint_vel) / dt
+        smoothed_jacc = (alpha_a * raw_jacc) + ((1 - alpha_a) * np.array(system_state["joint_acceleration"]))
+
+        system_state["velocity"] = smoothed_vel.tolist()
+        system_state["acceleration"] = smoothed_acc.tolist()
+        system_state["joint_velocity"] = smoothed_jvel.tolist()
+        system_state["joint_acceleration"] = smoothed_jacc.tolist()
+
+        last_telemetry_pos = current_pos
+        last_telemetry_vel = smoothed_vel
+        last_telemetry_angles = current_angles
+        last_telemetry_joint_vel = smoothed_jvel
+        last_telemetry_time = current_time
+
+        await asyncio.sleep(0.02) 
+
+    system_state["velocity"] = [0.0, 0.0, 0.0]
+    system_state["acceleration"] = [0.0, 0.0, 0.0]
+    system_state["joint_velocity"] = [0.0] * 6
+    system_state["joint_acceleration"] = [0.0] * 6
+    last_telemetry_vel = np.zeros(3)
+    last_telemetry_joint_vel = np.zeros(6)
+
+    if system_state["status"] != "ESTOPPED":
+        system_state["status"] = "IDLE"
+        if trigger_resume and not SIMULATION_MODE and usb_serial and usb_serial.is_open:
+            try:
+                usb_serial.write(b"<RESUME>")
+            except Exception:
+                pass
+
 @app.get("/inverse_kinematics")
 def calculate_ik(
+    background_tasks: BackgroundTasks,
     cur1: float, cur2: float, cur3: float, cur4: float, cur5: float, cur6: float,
     mode: str = "macro_auto",
     x: float = 0.0, y: float = 0.0, z: float = 0.0,
     px: float = 0.0, py: float = 0.0, pz: float = 0.0,
     dx: float = 0.0, dy: float = 0.0, dz: float = 0.0
 ):
-    # --------------------------------------------------------------------------
-    # INTERNAL SEQUENCE GENERATOR HELPERS
-    # --------------------------------------------------------------------------
     def calc_delay_frames(start_angles, ms, label, sol):
-        num_frames = max(1, int(ms / 33.33))
+        num_frames = max(1, int(ms / 20.0)) 
         frames = []
-        _, points = build_dh_chain(np.radians(start_angles))
-        frame_dict = {"angles": [round(float(a), 2) for a in start_angles], "joints": points, "label": label, "sol": sol}
+        _, points, matrices = build_dh_chain(np.radians(start_angles))
+        frame_dict = {"angles": [round(float(a), 2) for a in start_angles], "joints": points, "matrices": matrices, "label": label, "sol": sol}
         for _ in range(num_frames): frames.append(frame_dict)
         return frames, start_angles
 
@@ -226,32 +405,32 @@ def calculate_ik(
         target = [0.0] * 6
         max_delta = np.max(np.abs(np.array(target) - np.array(start_angles)))
         T = max(1.5, max_delta / 35.0)  
-        tau = np.linspace(0, 1.0, int(T * 30))
+        tau = np.linspace(0, 1.0, int(T * 50)) 
         s_tau = 10*(tau**3) - 15*(tau**4) + 6*(tau**5)
         
         frames = []
         for s in s_tau:
             angs = [start_angles[j] + (target[j] - start_angles[j]) * s for j in range(6)]
-            _, points = build_dh_chain(np.radians(angs))
-            frames.append({"angles": [round(float(a), 2) for a in angs], "joints": points, "label": label, "sol": sol})
+            _, points, matrices = build_dh_chain(np.radians(angs))
+            frames.append({"angles": [round(float(a), 2) for a in angs], "joints": points, "matrices": matrices, "label": label, "sol": sol})
             
         return frames, target
 
     def calc_ptp_frames(start_angles, target_xyz, label, sol):
         best_res, best_err = find_best_ik(target_xyz, start_angles)
-        if best_res is None or best_err > 10.0: return None, start_angles
+        if best_res is None or best_err > 25.0: return None, start_angles
         
         target_angles_deg = np.degrees(best_res.x)
         max_delta = np.max(np.abs(target_angles_deg - np.array(start_angles)))
         T = max(1.5, max_delta / 35.0)  
-        tau = np.linspace(0, 1.0, int(T * 30))
+        tau = np.linspace(0, 1.0, int(T * 50)) 
         s_tau = 10*(tau**3) - 15*(tau**4) + 6*(tau**5)
         
         frames = []
         for s in s_tau:
             angs = start_angles + (target_angles_deg - start_angles) * s
-            _, points = build_dh_chain(np.radians(angs))
-            frames.append({"angles": [round(float(a), 2) for a in angs], "joints": points, "label": label, "sol": sol})
+            _, points, matrices = build_dh_chain(np.radians(angs))
+            frames.append({"angles": [round(float(a), 2) for a in angs], "joints": points, "matrices": matrices, "label": label, "sol": sol})
         return frames, target_angles_deg.tolist()
 
     def calc_lin_frames(start_angles, target_xyz, label, sol):
@@ -260,10 +439,10 @@ def calculate_ik(
         if dist < 1.0: return calc_delay_frames(start_angles, 33, label, sol)
 
         best_res, best_err = find_best_ik(target_xyz, start_angles)
-        if best_err > 10.0: return None, start_angles
+        if best_err > 25.0: return None, start_angles
 
         T = max(1.0, dist / 35.0)  
-        tau = np.linspace(0, 1.0, int(T * 30))
+        tau = np.linspace(0, 1.0, int(T * 50)) 
         s_tau = 10*(tau**3) - 15*(tau**4) + 6*(tau**5)
         
         cartesian_path = [start_xyz + (np.array(target_xyz) - start_xyz) * s for s in s_tau]
@@ -277,32 +456,21 @@ def calculate_ik(
         raw_angles = np.array(raw_angles)
         raw_angles[-1] = np.degrees(best_res.x) 
         
-        b, a = butter(N=2, Wn=0.1, btype='lowpass')
-        smoothed_angles = np.zeros_like(raw_angles)
-        if len(raw_angles) > 9: 
-            for i in range(6): smoothed_angles[:, i] = filtfilt(b, a, raw_angles[:, i])
-            smoothed_angles[-1] = np.degrees(best_res.x)
-        else:
-            smoothed_angles = raw_angles
+        smoothed_angles = raw_angles
 
         frames = []
         for angs in smoothed_angles:
-            _, points = build_dh_chain(np.radians(angs))
-            frames.append({"angles": [round(float(a), 2) for a in angs], "joints": points, "label": label, "sol": sol})
+            _, points, matrices = build_dh_chain(np.radians(angs))
+            frames.append({"angles": [round(float(a), 2) for a in angs], "joints": points, "matrices": matrices, "label": label, "sol": sol})
         return frames, smoothed_angles[-1].tolist()
 
-    # --------------------------------------------------------------------------
-    # API ROUTER LOGIC
-    # --------------------------------------------------------------------------
     current = [cur1, cur2, cur3, cur4, cur5, cur6]
     frames = []
 
-    T_start, _ = build_dh_chain(np.radians(current))
+    T_start, _, _ = build_dh_chain(np.radians(current))
     current_xyz = T_start[:3, 3]
 
-    # ROUTE 1: HOME MACRO
     if mode == "macro_home":
-        # FIX: Only extract if we are down near the table.
         if current_xyz[2] < 300.0:
             extract_z = current_xyz[2] + 100.0 
             f, current = calc_lin_frames(current, [current_xyz[0], current_xyz[1], extract_z], "LIN (EXTRACT)", 0)
@@ -311,13 +479,11 @@ def calculate_ik(
         f, current = calc_home_frames(current, "PTP (HOMING)", 0)
         frames.extend(f)
         
-        return {"status": "success", "frames": frames}
+        background_tasks.add_task(macro_player, frames, False)
+        return {"status": "success"}
 
-    # ROUTE 2: MANUAL POINT-TO-POINT + PLUNGE MACRO
     elif mode == "macro_manual":
         clearance_z = z + 100.0
-
-        # FIX: Only extract if we are down near the table. Prevent drawing impossible vertical lines from Home.
         if current_xyz[2] < 300.0:
             extract_z = max(current_xyz[2] + 100.0, clearance_z)
             f, current = calc_lin_frames(current, [current_xyz[0], current_xyz[1], extract_z], "LIN (EXTRACT)", 0)
@@ -331,12 +497,11 @@ def calculate_ik(
         if not f: return {"status": "failed"}
         frames.extend(f)
 
-        return {"status": "success", "frames": frames}
+        background_tasks.add_task(macro_player, frames, False)
+        return {"status": "success"}
 
-    # ROUTE 3: FULL AUTO PICK-AND-PLACE MACRO
     elif mode == "macro_auto":
         clearance_z = max(pz, dz) + 100.0
-
         if current_xyz[2] < 300.0:
             extract_z = max(current_xyz[2] + 100.0, clearance_z)
             f, current = calc_lin_frames(current, [current_xyz[0], current_xyz[1], extract_z], "LIN (EXTRACT)", 0)
@@ -375,7 +540,8 @@ def calculate_ik(
         f, current = calc_home_frames(current, "PTP (HOMING)", 0)
         frames.extend(f)
 
-        return {"status": "success", "frames": frames, "trigger_resume": True}
+        background_tasks.add_task(macro_player, frames, True)
+        return {"status": "success"}
 
     return {"status": "failed", "message": "Invalid Mode"}
 
