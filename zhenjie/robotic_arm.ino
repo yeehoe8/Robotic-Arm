@@ -4,7 +4,7 @@
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
 // --- HARDWARE CONTROL PINS ---
-const int irSensorPin = 3;     // IR Sensor input
+const int irSensorPin = 13;     // IR Sensor input
 const int conveyorPin = 4;     // Relay for Conveyor Belt
 const int suckMotorPin = 6;    // Relay for Suction Pump
 
