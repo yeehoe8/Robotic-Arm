@@ -44,6 +44,10 @@
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-cyan); margin-top: -6px; box-shadow: 0 0 10px rgba(14, 165, 233, 0.5); }
         .joint-input { width: 65px !important; padding: 4px 8px !important; background: rgba(15, 23, 42, 0.5) !important; color: var(--accent-cyan) !important; border: 1px solid var(--border-color) !important; text-align: right; border-radius: 4px; }
         
+        .zone-delete-btn { background: transparent !important; color: var(--danger) !important; border: none; font-size: 1.2rem; font-weight: bold; cursor: pointer; padding: 0 0 0 8px !important; box-shadow: none !important; width: auto !important; margin: 0 !important;}
+        .zone-delete-btn:hover:not(:disabled) { transform: scale(1.2) !important; color: #fff !important; }
+        .zone-delete-btn:disabled { color: var(--border-color) !important; cursor: not-allowed; }
+
         .status-badge { display: inline-block; padding: 8px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: bold; margin-bottom: 15px; width: 100%; text-align: center; box-sizing: border-box; transition: all 0.3s;}
         .status-idle { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
         .status-running { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
@@ -176,16 +180,16 @@
                 
                 <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: bold; display:block; margin-bottom: 8px;">Pick Coordinate (Sensor Trigger)</span>
                 <div class="ik-inputs">
-                    <label>X <input type="number" id="pickX" value="150" disabled></label>
-                    <label>Y <input type="number" id="pickY" value="0" disabled></label>
-                    <label>Z <input type="number" id="pickZ" value="-50" disabled></label>
+                    <label>X <input type="number" id="pickX" value="167" disabled></label>
+                    <label>Y <input type="number" id="pickY" value="247" disabled></label>
+                    <label>Z <input type="number" id="pickZ" value="0" disabled></label>
                 </div>
 
-                <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: bold; display:block; margin-bottom: 8px; margin-top: 15px;">Place Coordinate (Drop Zone)</span>
+                <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: bold; display:block; margin-bottom: 8px; margin-top: 15px;">New Zone Default Coordinate</span>
                 <div class="ik-inputs">
-                    <label>X <input type="number" id="placeX" value="0" disabled></label>
-                    <label>Y <input type="number" id="placeY" value="150" disabled></label>
-                    <label>Z <input type="number" id="placeZ" value="-50" disabled></label>
+                    <label>X <input type="number" id="placeX" value="250" disabled></label>
+                    <label>Y <input type="number" id="placeY" value="-250" disabled></label>
+                    <label>Z <input type="number" id="placeZ" value="0" disabled></label>
                 </div>
 
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
@@ -194,7 +198,7 @@
                 </div>
 
                 <div id="dropZoneListUI" style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted); background: rgba(15, 23, 42, 0.4); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); max-height: 140px; overflow-y: auto;">
-                    <em>No custom zones added. Will use default coordinate above.</em>
+                    <!-- Dynamically Populated via JS -->
                 </div>
 
                 <button id="workflowBtn" class="btn-hybrid" onclick="toggleAutoBatch()" disabled style="margin-top: 15px;">Start Auto Batch</button>
@@ -688,6 +692,7 @@
                 document.getElementById('addZoneBtn').disabled = zoneLock;
                 document.getElementById('clearZonesBtn').disabled = zoneLock;
                 document.querySelectorAll('.zone-edit-input').forEach(el => el.disabled = zoneLock);
+                document.querySelectorAll('.zone-delete-btn').forEach(el => el.disabled = zoneLock);
             };
 
             const wBtn = document.getElementById('workflowBtn');
@@ -775,7 +780,15 @@
         // ==============================================================================
         // MULTIPLE DROP ZONE LOGIC
         // ==============================================================================
-        let customDropZones = [];
+        // Default initialized with the 6 preset coordinates
+        let customDropZones = [
+            { x: 250, y: -280, z: -20 },
+            { x: 250, y: -250, z: -20 },
+            { x: 250, y: -220, z: -20 },
+            { x: 250, y: -265, z: 10 },
+            { x: 250, y: -235, z: 10 },
+            { x: 250, y: -250, z: 40 }
+        ];
         let currentDropIndex = 0;
 
         function addDropZone() {
@@ -790,6 +803,14 @@
         function clearDropZones() {
             customDropZones = [];
             currentDropIndex = 0;
+            updateDropZoneUI();
+        }
+
+        function deleteZone(index) {
+            customDropZones.splice(index, 1);
+            if (currentDropIndex >= customDropZones.length && customDropZones.length > 0) {
+                currentDropIndex = customDropZones.length - 1;
+            }
             updateDropZoneUI();
         }
         
@@ -824,7 +845,10 @@
                         <span style="font-size: 0.75rem;">Z</span>
                         <input type="number" class="zone-edit-input" value="${zone.z}" onchange="editZone(${index}, 'z', this.value)" style="width: 45px !important; padding: 4px !important; font-size: 0.75rem; background: rgba(15, 23, 42, 0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
                     </div>
-                    ${isNext}
+                    <div style="display: flex; align-items: center;">
+                        ${isNext}
+                        <button onclick="deleteZone(${index})" class="zone-delete-btn" title="Delete Zone">&times;</button>
+                    </div>
                 </div>`;
             });
             html += "</div>";
@@ -832,6 +856,7 @@
             
             if (appState === 'WORKING' || appState === 'ESTOPPED' || isAutoBatchActive) {
                 document.querySelectorAll('.zone-edit-input').forEach(el => el.disabled = true);
+                document.querySelectorAll('.zone-delete-btn').forEach(el => el.disabled = true);
             }
         }
 
@@ -1102,6 +1127,8 @@
             } catch(e) {}
         }, 20); // Exactly 50Hz sync to match the backend trajectory generator
         
+        // Initialize UI with preset zones visible on boot
+        updateDropZoneUI();
         updateUIState();
     </script>
 </body> 
