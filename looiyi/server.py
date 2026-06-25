@@ -507,4 +507,8 @@ def calculate_ik(
         background_tasks.add_task(macro_player, frames, True)
         return {"status": "success"}
 
-    return
+    return {"status": "failed", "message": "Invalid Mode"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
