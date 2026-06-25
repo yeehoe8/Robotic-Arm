@@ -3,38 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>6-DOF Mechatronic Arm Dashboard</title>
+    <title>6-DOF SCADA Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
-        :root { --bg-main: #0b0f19; --bg-panel: #131c31; --bg-card: #1e293b; --border-color: #334155; --text-main: #f8fafc; --text-muted: #94a3b8; --accent-cyan: #0ea5e9; --accent-cyan-hover: #38bdf8; --accent-orange: #f59e0b; --accent-green: #10b981; --accent-purple: #a855f7; --danger: #ef4444; }
+        :root { --bg-main: #0b0f19; --bg-panel: #131c31; --bg-card: #1e293b; --border-color: #334155; --text-main: #f8fafc; --text-muted: #94a3b8; --accent-cyan: #0ea5e9; --accent-orange: #f59e0b; --accent-green: #10b981; --accent-purple: #a855f7; --danger: #ef4444; }
         body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; display: flex; background-color: var(--bg-main); color: var(--text-main); height: 100vh; overflow: hidden; }
+        
+        /* SIDEBAR */
         #sidebar { width: 420px; background-color: var(--bg-panel); border-right: 1px solid var(--border-color); padding: 25px; box-shadow: 4px 0 15px rgba(0,0,0,0.3); overflow-y: auto; z-index: 5; display: flex; flex-direction: column; gap: 20px; }
         #sidebar::-webkit-scrollbar { width: 8px; } #sidebar::-webkit-scrollbar-track { background: var(--bg-panel); } #sidebar::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
         h2 { font-size: 1.4rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid var(--accent-cyan); padding-bottom: 10px; margin: 0 0 5px 0; color: #fff; }
-        h3 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 15px 0; color: var(--text-muted); }
+        
+        .tab-switcher { display: flex; background: var(--bg-card); border-radius: 8px; padding: 4px; border: 1px solid var(--border-color); }
+        .tab-btn { flex: 1; text-align: center; padding: 10px; font-weight: 600; font-size: 0.9rem; cursor: pointer; border-radius: 6px; border: none; background: transparent; color: var(--text-muted); transition: all 0.3s; }
+        .tab-btn.active { background: var(--accent-cyan); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .tab-content { display: none; flex-direction: column; gap: 15px; }
+        .tab-content.active { display: flex; }
+
         .slider-group { background: var(--bg-card); padding: 18px; border-radius: 12px; border: 1px solid var(--border-color); transition: border-color 0.3s; }
         .panel-hardware { border-top: 3px solid var(--accent-green); }
-        .panel-workflow { border-top: 3px solid var(--accent-purple); }
         .flex-row { display: flex; gap: 10px; align-items: center; }
         input[type=text], input[type=number] { width: 100%; padding: 10px; background: #0f172a; border: 1px solid var(--border-color); color: #fff; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; text-align: center; }
         input[type=text]:focus, input[type=number]:focus { outline: 2px solid var(--accent-cyan); border-color: transparent; }
-        .ik-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        
+        .ik-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
         .ik-inputs label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--text-muted); gap: 5px; font-weight: bold; }
+        
         button { background: linear-gradient(135deg, var(--accent-cyan), #0284c7); color: #fff; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
         button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(14, 165, 233, 0.3); }
         button:active:not(:disabled) { transform: translateY(0); }
         button:disabled { background: #334155; color: #64748b; cursor: not-allowed; box-shadow: none; transform: none; }
         
         .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 600; font-size: 0.95rem; }
-        input[type=range] { appearance: none; -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; }
+        input[type=range] { appearance: none; width: 100%; background: transparent; cursor: pointer; }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #0f172a; border-radius: 3px; border: 1px solid #334155; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-cyan); margin-top: -6px; box-shadow: 0 0 10px rgba(14, 165, 233, 0.5); transition: transform 0.1s; }
-        input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); background: #fff; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-cyan); margin-top: -6px; box-shadow: 0 0 10px rgba(14, 165, 233, 0.5); }
         .joint-input { width: 65px !important; padding: 4px 8px !important; background: rgba(15, 23, 42, 0.5) !important; color: var(--accent-cyan) !important; border: 1px solid var(--border-color) !important; text-align: right; border-radius: 4px; }
-        .joint-input::-webkit-outer-spin-button, .joint-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         
         .status-badge { display: inline-block; padding: 8px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: bold; margin-bottom: 15px; width: 100%; text-align: center; box-sizing: border-box; transition: all 0.3s;}
         .status-idle { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
@@ -46,17 +54,54 @@
         .btn-hardware { background: linear-gradient(135deg, var(--accent-green), #059669); }
         .btn-home { background: linear-gradient(135deg, var(--accent-orange), #d97706); }
         .btn-hybrid { background: linear-gradient(135deg, var(--accent-purple), #7e22ce); }
-        .btn-override { background: transparent; border: 1px solid #475569; color: #94a3b8; margin-top: 10px; box-shadow: none;}
-        .btn-override:hover:not(:disabled) { background: #1e293b; color: #fff; border-color: #fff; transform: none; box-shadow: none;}
         
-        #plot-container { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; background-color: var(--bg-main); outline: none; }
-        .data-readout { position: absolute; top: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 20px 25px; border-radius: 12px; border: 1px solid rgba(14, 165, 233, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'JetBrains Mono', monospace; font-size: 1rem; color: var(--text-muted); z-index: 10; backdrop-filter: blur(12px); }
+        .btn-estop { background: linear-gradient(135deg, var(--danger), #b91c1c); color: white; margin-top: 15px; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); text-transform: uppercase; letter-spacing: 1px; }
+        .btn-estop:hover:not(:disabled) { background: #b91c1c; box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6); }
+
+        /* MAIN CONTENT */
+        #main-content { flex-grow: 1; position: relative; background-color: var(--bg-main); overflow: hidden; display: flex; flex-direction: column; }
+        #view-toggles { position: absolute; top: 25px; left: 25px; display: flex; background: rgba(15, 23, 42, 0.8); border-radius: 8px; border: 1px solid var(--border-color); z-index: 20; backdrop-filter: blur(5px); padding: 4px; }
+        .view-btn { background: transparent; color: var(--text-muted); border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.3s; box-shadow: none; width: auto; }
+        .view-btn.active { background: var(--accent-cyan); color: #fff; }
+        .view-btn:hover:not(.active) { background: #1e293b; transform: none; box-shadow: none; }
+
+        #plot-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+        
+        #telemetry-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; display: none; flex-direction: column; gap: 20px; padding: 80px 30px 30px 30px; box-sizing: border-box; overflow-y: auto; background: var(--bg-main); z-index: 10; }
+        .chart-card { background: var(--bg-card); border-radius: 12px; padding: 15px; border: 1px solid var(--border-color); height: 250px; position: relative; flex-shrink: 0; }
+        .chart-card h3 { margin: 0 0 10px 0; color: #fff; font-size: 1rem; }
+        
+        /* Recording Indicator */
+        .recording-indicator { position: absolute; top: 15px; right: 15px; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); padding: 4px 10px; border-radius: 4px; color: var(--danger); font-size: 0.8rem; font-weight: bold; display: flex; align-items: center; gap: 8px; animation: pulseRed 2s infinite; }
+        .recording-dot { width: 8px; height: 8px; background: var(--danger); border-radius: 50%; }
+
+        .data-readout { position: absolute; top: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 20px 25px; border-radius: 12px; border: 1px solid rgba(14, 165, 233, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'JetBrains Mono', monospace; font-size: 1rem; color: var(--text-muted); z-index: 20; backdrop-filter: blur(12px); }
         .data-readout strong { color: #fff; font-size: 1.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; display: block; }
         .data-readout span { color: var(--accent-cyan); font-weight: 700; display: inline-block; width: 75px; text-align: right; }
         .coord-line { margin-bottom: 10px; display: flex; justify-content: space-between; width: 160px; }
-        .bt-floating-status { position: absolute; bottom: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 12px 20px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: 'Inter', sans-serif; font-size: 0.95rem; display: flex; align-items: center; gap: 12px; }
-        .bt-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 8px var(--danger); transition: background 0.3s, box-shadow 0.3s; }
+        
+        .bt-floating-status { position: absolute; bottom: 25px; right: 25px; background: rgba(15, 23, 42, 0.65); padding: 12px 20px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2); font-family: 'Inter', sans-serif; font-size: 0.95rem; display: flex; align-items: center; gap: 12px; z-index: 20;}
+        .bt-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 8px var(--danger); transition: 0.3s; }
         canvas { display: block; outline: none; }
+
+        .toggle-container { display: flex; align-items: center; gap: 12px; margin-top: 15px; }
+        .switch { position: relative; display: inline-block; width: 46px; height: 24px; flex-shrink: 0; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--bg-main); border: 2px solid var(--border-color); transition: .4s; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: var(--text-muted); transition: .4s; }
+        input:checked + .slider { background-color: rgba(168, 85, 247, 0.2); border-color: var(--accent-purple); }
+        input:checked + .slider:before { transform: translateX(22px); background-color: var(--accent-purple); }
+        .slider.round { border-radius: 24px; }
+        .slider.round:before { border-radius: 50%; }
+
+        @media (max-width: 800px) {
+            body { flex-direction: column-reverse; overflow-y: auto; }
+            #sidebar { width: 100%; height: auto; border-right: none; border-top: 1px solid var(--border-color); padding: 15px; box-sizing: border-box; }
+            #plot-container { height: 50vh; width: 100%; flex-shrink: 0; }
+            .data-readout { top: 10px; right: 10px; padding: 10px; font-size: 0.8rem; }
+            .data-readout strong { font-size: 0.9rem; margin-bottom: 5px; padding-bottom: 5px; }
+            .bt-floating-status { bottom: 10px; right: 10px; padding: 8px 15px; font-size: 0.8rem; }
+        }
     </style>
 </head>
 <body>
@@ -64,88 +109,362 @@
         <h2>Control Panel</h2>
         
         <div class="slider-group panel-hardware">
-            <h3 style="color: var(--accent-green);">1. System Link</h3>
+            <h3 style="color: var(--accent-green);">System Link</h3>
             <div class="flex-row">
                 <input type="text" id="comPort" value="COM10" placeholder="COM Port">
                 <button onclick="connectSerial()" class="btn-hardware" id="connectBtn">Connect</button>
             </div>
-            <!-- SIMULATION UNLOCK BUTTON -->
-            <button onclick="enableSimMode()" style="background: transparent; border: 1px solid var(--accent-purple); color: var(--accent-purple); margin-top: 15px; box-shadow: none;">Test in Simulation Mode</button>
+            
+            <div class="toggle-container">
+                <label class="switch">
+                    <input type="checkbox" id="simToggleSwitch" onchange="toggleSimMode()">
+                    <span class="slider round"></span>
+                </label>
+                <span id="simToggleLabel" style="color: var(--accent-purple); font-weight: 600; font-size: 0.9rem;">Simulation Mode: OFF</span>
+            </div>
+            
+            <button onclick="toggleEStop()" id="globalEstopBtn" class="btn-estop" disabled>EMERGENCY STOP</button>
         </div>
-        
-        <button id="homeBtn" class="btn-home" onclick="triggerHomeSequence()" disabled>Return to Home Position</button>
-        
-        <div id="slidersContainer">
-            <script>
-                const customLimits = [
-                    { min: -90, max: 90 },    
-                    { min: -60, max: 60 },    
-                    { min: -55, max: 19 },    
-                    { min: -135, max: 135 },  
-                    { min: -90, max: 90 },    
-                    { min: -90, max: 90 }     
-                ];
-                
-                for (let i = 1; i <= 6; i++) {
-                    document.write(`
-                        <div class="slider-group" style="padding: 12px 18px;">
-                            <div class="slider-header" style="margin-bottom: 8px;">
-                                <span style="color: #cbd5e1; font-size: 0.85rem;">Joint ${i}</span>
-                                <div style="display: flex; align-items: center; gap: 4px;">
-                                    <input type="number" id="num${i}" class="joint-input" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0.0" onchange="syncFromInput(${i})" disabled>
-                                    <span style="color:var(--accent-cyan); font-family:'JetBrains Mono', monospace;">&deg;</span>
+
+        <div class="tab-switcher">
+            <button class="tab-btn active" id="btnTabManual" onclick="switchSidebarTab('manual')">Manual Control</button>
+            <button class="tab-btn" id="btnTabAuto" onclick="switchSidebarTab('auto')">Auto Workflow</button>
+        </div>
+
+        <div id="tab-manual" class="tab-content active">
+            <div class="slider-group" style="border-top: 3px solid var(--accent-cyan);">
+                <h3 style="color: var(--accent-cyan); margin-bottom: 15px;">Target Coordinate</h3>
+                <div class="ik-inputs">
+                    <label>X <input type="number" id="manX" value="150" disabled></label>
+                    <label>Y <input type="number" id="manY" value="150" disabled></label>
+                    <label>Z <input type="number" id="manZ" value="50" disabled></label>
+                </div>
+                <button id="manualMoveBtn" onclick="executeManualMovement()" disabled>Execute</button>
+            </div>
+
+            <button id="homeBtn" class="btn-home" onclick="triggerHomeSequence()" disabled>Return to Home Position</button>
+            
+            <div id="slidersContainer">
+                <script>
+                    const customLimits = [
+                        { min: -90, max: 90 }, { min: -60, max: 60 }, { min: -55, max: 19 },    
+                        { min: -135, max: 135 }, { min: -90, max: 90 }, { min: -90, max: 90 }     
+                    ];
+                    for (let i = 1; i <= 6; i++) {
+                        document.write(`
+                            <div class="slider-group" style="padding: 12px 18px; margin-bottom:10px;">
+                                <div class="slider-header" style="margin-bottom: 8px;">
+                                    <span style="color: #cbd5e1; font-size: 0.85rem;">Joint ${i}</span>
+                                    <div style="display: flex; align-items: center; gap: 4px;">
+                                        <input type="number" id="num${i}" class="joint-input" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0.0" onchange="syncFromInput(${i})" disabled>
+                                        <span style="color:var(--accent-cyan); font-family:'JetBrains Mono', monospace;">&deg;</span>
+                                    </div>
                                 </div>
+                                <input type="range" id="q${i}" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0" oninput="updateRobot()" disabled>
                             </div>
-                            <input type="range" id="q${i}" min="${customLimits[i-1].min}" max="${customLimits[i-1].max}" step="0.1" value="0" oninput="updateRobot()" disabled>
-                        </div>
-                    `);
-                }
-            </script>
+                        `);
+                    }
+                </script>
+            </div>
         </div>
 
-        <div class="slider-group panel-workflow">
-            <h3 style="color: var(--accent-purple);">2. Autonomous Hybrid Sorting</h3>
-            
-            <div id="sysStatus" class="status-badge status-idle">System Offline</div>
-            
-            <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: bold; display:block; margin-bottom: 8px;">Pick Coordinate (Sensor Trigger)</span>
-            <div class="ik-inputs">
-                <label>X <input type="number" id="pickX" value="150" disabled></label>
-                <label>Y <input type="number" id="pickY" value="0" disabled></label>
-                <label>Z <input type="number" id="pickZ" value="-50" disabled></label>
-            </div>
+        <div id="tab-auto" class="tab-content">
+            <div class="slider-group panel-workflow">
+                <h3 style="color: var(--accent-purple);">Auto Pick-and-Place</h3>
+                
+                <div id="sysStatus" class="status-badge status-idle">System Offline</div>
+                
+                <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: bold; display:block; margin-bottom: 8px;">Pick Coordinate (Sensor Trigger)</span>
+                <div class="ik-inputs">
+                    <label>X <input type="number" id="pickX" value="150" disabled></label>
+                    <label>Y <input type="number" id="pickY" value="0" disabled></label>
+                    <label>Z <input type="number" id="pickZ" value="-50" disabled></label>
+                </div>
 
-            <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: bold; display:block; margin-bottom: 8px; margin-top: 15px;">Place Coordinate (Drop Zone)</span>
-            <div class="ik-inputs">
-                <label>X <input type="number" id="placeX" value="0" disabled></label>
-                <label>Y <input type="number" id="placeY" value="150" disabled></label>
-                <label>Z <input type="number" id="placeZ" value="-50" disabled></label>
-            </div>
+                <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: bold; display:block; margin-bottom: 8px; margin-top: 15px;">Place Coordinate (Drop Zone)</span>
+                <div class="ik-inputs">
+                    <label>X <input type="number" id="placeX" value="0" disabled></label>
+                    <label>Y <input type="number" id="placeY" value="150" disabled></label>
+                    <label>Z <input type="number" id="placeZ" value="-50" disabled></label>
+                </div>
 
-            <button id="workflowBtn" class="btn-hybrid" onclick="executeHybridSequence()" disabled>Execute Pick & Place</button>
-            <button id="overrideBtn" class="btn-override" onclick="forceConveyorOverride()" disabled>Force Conveyor Restart</button>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button id="addZoneBtn" onclick="addDropZone()" style="background: rgba(14, 165, 233, 0.1); color: var(--accent-cyan); border: 1px dashed var(--accent-cyan); padding: 8px;" disabled>➕ Add Drop Zone</button>
+                    <button id="clearZonesBtn" onclick="clearDropZones()" style="background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px dashed var(--danger); padding: 8px; width: 30%;" disabled>🗑️ Clear</button>
+                </div>
+
+                <div id="dropZoneListUI" style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted); background: rgba(15, 23, 42, 0.4); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); max-height: 140px; overflow-y: auto;">
+                    <em>No custom zones added. Will use default coordinate above.</em>
+                </div>
+
+                <button id="workflowBtn" class="btn-hybrid" onclick="toggleAutoBatch()" disabled style="margin-top: 15px;">Start Auto Batch</button>
+            </div>
         </div>
     </div>
 
-    <div id="plot-container">
-        <div class="data-readout">
+    <div id="main-content">
+        <div id="view-toggles">
+            <button class="view-btn active" id="btnView3D" onclick="switchMainView('3d')">3D Digital Twin</button>
+            <button class="view-btn" id="btnViewTel" onclick="switchMainView('telemetry')">Theoretical Profile Analysis</button>
+        </div>
+
+        <div class="data-readout" id="tcpReadout">
             <strong>TCP Real-time</strong>
             <div class="coord-line">X: <span id="outX">0.00</span> mm</div>
             <div class="coord-line">Y: <span id="outY">0.00</span> mm</div>
             <div class="coord-line">Z: <span id="outZ">0.00</span> mm</div>
-            <div style="font-size: 0.8rem; margin-top: 10px; color: #cbd5e1; border-top: 1px solid var(--border-color); padding-top: 5px;">Engine: <span id="moveMode" style="color: var(--accent-purple); width:auto;">IDLE</span></div>
+            <div style="font-size: 0.8rem; margin-top: 10px; color: #cbd5e1; border-top: 1px solid var(--border-color); padding-top: 5px;">Engine: <span id="moveMode" style="color: var(--text-muted); width:auto;">IDLE</span></div>
         </div>
+
         <div class="bt-floating-status">
             <div class="bt-indicator-dot" id="btIndicator"></div>
             <span id="btText" style="font-weight: 600;">Disconnected</span>
         </div>
+
+        <div id="plot-container"></div>
+
+        <div id="telemetry-container">
+            <div id="recordingIndicator" class="recording-indicator" style="display: none;">
+                <div class="recording-dot"></div> RECORDING BATCH
+            </div>
+            
+            <!-- Global Profile Slice Dropdown -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 15px;">
+                <h2 style="color: var(--accent-cyan); margin: 0; font-size: 1.4rem; border: none; padding: 0;">Cartesian Space</h2>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold; text-transform: uppercase;">View Filter:</span>
+                    <select id="zoneSelect" onchange="renderCharts()" style="background: rgba(15, 23, 42, 0.8); color: var(--accent-cyan); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; font-family: 'Inter', sans-serif; font-weight: bold; outline: none; cursor: pointer; min-width: 200px;">
+                        <option value="ALL">All Zones (Entire Batch)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Cartesian Telemetry Section -->
+            <div class="chart-card">
+                <h3>Position Profile (mm)</h3>
+                <canvas id="posChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Velocity Profile (mm/s)</h3>
+                <canvas id="velChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Acceleration Profile (mm/s²)</h3>
+                <canvas id="accChart"></canvas>
+            </div>
+            
+            <!-- Angular Joint Space Section -->
+            <h2 style="color: var(--accent-purple); padding-bottom: 5px; border-bottom: 1px solid var(--border-color); margin-top: 25px; display: flex; justify-content: space-between; align-items: center;">
+                Joint Space Analysis
+                <select id="jointSelect" style="background: var(--bg-card); color: #fff; border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; font-family: 'Inter', sans-serif; outline: none; cursor: pointer;">
+                    <option value="0">Joint 1 (Base)</option>
+                    <option value="1">Joint 2 (Shoulder)</option>
+                    <option value="2">Joint 3 (Elbow)</option>
+                    <option value="3">Joint 4 (Wrist Roll)</option>
+                    <option value="4">Joint 5 (Wrist Pitch)</option>
+                    <option value="5">Joint 6 (Wrist Yaw)</option>
+                </select>
+            </h2>
+            <div class="chart-card">
+                <h3>Joint Angle Profile (&deg;)</h3>
+                <canvas id="jointPosChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Joint Velocity Profile (&deg;/s)</h3>
+                <canvas id="jointVelChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Joint Acceleration Profile (&deg;/s²)</h3>
+                <canvas id="jointAccChart"></canvas>
+            </div>
+        </div>
     </div>
 
     <script>
-        // --- THREE.JS SCENE SETUP ---
+        // ==============================================================================
+        // UI SWITCHING LOGIC
+        // ==============================================================================
+        function switchSidebarTab(tab) {
+            document.getElementById('btnTabManual').classList.remove('active');
+            document.getElementById('btnTabAuto').classList.remove('active');
+            document.getElementById('tab-manual').classList.remove('active');
+            document.getElementById('tab-auto').classList.remove('active');
+
+            if(tab === 'manual') {
+                document.getElementById('btnTabManual').classList.add('active');
+                document.getElementById('tab-manual').classList.add('active');
+            } else {
+                document.getElementById('btnTabAuto').classList.add('active');
+                document.getElementById('tab-auto').classList.add('active');
+            }
+        }
+
+        let currentView = '3d';
+        function switchMainView(view) {
+            document.getElementById('btnView3D').classList.remove('active');
+            document.getElementById('btnViewTel').classList.remove('active');
+            
+            if(view === '3d') {
+                document.getElementById('btnView3D').classList.add('active');
+                document.getElementById('plot-container').style.display = 'block';
+                document.getElementById('telemetry-container').style.display = 'none';
+                document.getElementById('tcpReadout').style.display = 'block';
+                currentView = '3d';
+            } else {
+                document.getElementById('btnViewTel').classList.add('active');
+                document.getElementById('plot-container').style.display = 'none';
+                document.getElementById('telemetry-container').style.display = 'flex';
+                document.getElementById('tcpReadout').style.display = 'none';
+                currentView = 'telemetry';
+                
+                // Force a render of the static frozen graphs when the user switches tabs
+                setTimeout(() => {
+                    renderCharts();
+                }, 50);
+            }
+        }
+
+        // ==============================================================================
+        // BATCH-RECORDING TELEMETRY GRAPHING (CHART.JS)
+        // ==============================================================================
+        const chartOptions = {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            elements: { point: { radius: 0 }, line: { tension: 0.4, borderWidth: 2 } },
+            scales: {
+                x: { display: false }, 
+                y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: {family: 'JetBrains Mono'} } }
+            },
+            plugins: { legend: { labels: { color: '#fff', font: {family: 'Inter', size: 11} } } }
+        };
+
+        const createChart = (ctxId) => {
+            return new Chart(document.getElementById(ctxId).getContext('2d'), {
+                type: 'line',
+                data: { labels: [], datasets: [
+                    { label: 'X Axis', borderColor: '#ef4444', data: [] },
+                    { label: 'Y Axis', borderColor: '#10b981', data: [] },
+                    { label: 'Z Axis', borderColor: '#0ea5e9', data: [] }
+                ]},
+                options: chartOptions
+            });
+        };
+
+        const createSingleChart = (ctxId, label, color) => {
+            return new Chart(document.getElementById(ctxId).getContext('2d'), {
+                type: 'line',
+                data: { labels: [], datasets: [
+                    { label: label, borderColor: color, data: [] }
+                ]},
+                options: chartOptions
+            });
+        };
+
+        const posChart = createChart('posChart');
+        const velChart = createChart('velChart');
+        const accChart = createChart('accChart');
+        
+        const jointPosChart = createSingleChart('jointPosChart', 'Angle', '#a855f7');
+        const jointVelChart = createSingleChart('jointVelChart', 'Velocity', '#f59e0b');
+        const jointAccChart = createSingleChart('jointAccChart', 'Acceleration', '#10b981');
+
+        // Master Data Storage
+        let masterCartesian = {
+            pos: [[], [], []],
+            vel: [[], [], []],
+            acc: [[], [], []]
+        };
+
+        let jointHistory = {
+            pos: Array(6).fill().map(() => []),
+            vel: Array(6).fill().map(() => []),
+            acc: Array(6).fill().map(() => [])
+        };
+        
+        let zoneBoundaries = []; // Tracks { start: index, end: index } for slicing
+
+        let isRecording = false;
+        let tickCounter = 0;
+
+        function clearCharts() {
+            masterCartesian = { pos: [[],[],[]], vel: [[],[],[]], acc: [[],[],[]] };
+            jointHistory = {
+                pos: Array(6).fill().map(() => []),
+                vel: Array(6).fill().map(() => []),
+                acc: Array(6).fill().map(() => [])
+            };
+            zoneBoundaries = [];
+            tickCounter = 0;
+            updateZoneDropdown();
+            renderCharts();
+        }
+
+        function updateZoneDropdown() {
+            let select = document.getElementById('zoneSelect');
+            let currentVal = select.value;
+            let html = '<option value="ALL">All Zones (Entire Batch)</option>';
+            for(let i=0; i<zoneBoundaries.length; i++) {
+                html += `<option value="${i}">Zone ${i+1}</option>`;
+            }
+            select.innerHTML = html;
+            if(currentVal && currentVal !== '') select.value = currentVal;
+            else select.value = 'ALL';
+        }
+
+        function renderCharts() {
+            let zoneFilter = document.getElementById('zoneSelect').value;
+            let startIdx = 0;
+            let endIdx = masterCartesian.pos[0].length;
+            
+            // Slice Master arrays to fit the zone filter
+            if (zoneFilter !== 'ALL') {
+                let zIdx = parseInt(zoneFilter);
+                if (zoneBoundaries[zIdx]) {
+                    startIdx = zoneBoundaries[zIdx].start;
+                    endIdx = zoneBoundaries[zIdx].end;
+                }
+            }
+            
+            let labels = Array(Math.max(0, endIdx - startIdx)).fill('');
+            
+            posChart.data.labels = labels;
+            velChart.data.labels = labels;
+            accChart.data.labels = labels;
+            jointPosChart.data.labels = labels;
+            jointVelChart.data.labels = labels;
+            jointAccChart.data.labels = labels;
+            
+            for(let i=0; i<3; i++) {
+                posChart.data.datasets[i].data = masterCartesian.pos[i].slice(startIdx, endIdx);
+                velChart.data.datasets[i].data = masterCartesian.vel[i].slice(startIdx, endIdx);
+                accChart.data.datasets[i].data = masterCartesian.acc[i].slice(startIdx, endIdx);
+            }
+            
+            let jIdx = parseInt(document.getElementById('jointSelect').value);
+            if (jointHistory.pos[jIdx]) {
+                jointPosChart.data.datasets[0].data = jointHistory.pos[jIdx].slice(startIdx, endIdx);
+                jointVelChart.data.datasets[0].data = jointHistory.vel[jIdx].slice(startIdx, endIdx);
+                jointAccChart.data.datasets[0].data = jointHistory.acc[jIdx].slice(startIdx, endIdx);
+            }
+            
+            updateAllCharts();
+        }
+
+        function updateAllCharts() {
+            if (currentView === 'telemetry') {
+                posChart.update('none'); velChart.update('none'); accChart.update('none');
+                jointPosChart.update('none'); jointVelChart.update('none'); jointAccChart.update('none');
+            }
+        }
+
+        document.getElementById('jointSelect').addEventListener('change', () => {
+            renderCharts();
+        });
+
+        // ==============================================================================
+        // THREE.JS SCENE SETUP 
+        // ==============================================================================
         const container = document.getElementById('plot-container');
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color('#0b0f19'); 
         scene.add(new THREE.GridHelper(1200, 24, 0x1e293b, 0x1e293b));
         scene.add(new THREE.AmbientLight(0xffffff, 0.6));
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -179,291 +498,9 @@
         const pathLine = new THREE.Line(pathGeometry, new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 3, transparent: true, opacity: 0.85 }));
         scene.add(pathLine);
 
-        // ==============================================================================
-        // STATE MACHINE LOGIC
-        // ==============================================================================
-        let appState = 'DISCONNECTED'; 
-        let isSimulation = false;
+        const R2T = new THREE.Matrix4().set(1,0,0,0, 0,0,1,0, 0,-1,0,0, 0,0,0,1);
 
-        function enableSimMode() {
-            isSimulation = true;
-            appState = 'READY_TO_PICK';
-            updateUIState();
-            
-            document.getElementById('sysStatus').innerText = 'SIMULATION MODE ACTIVE';
-            document.getElementById('btText').innerText = "Virtual Simulation Link";
-            document.getElementById('btIndicator').style.background = "#a855f7";
-            document.getElementById('btIndicator').style.boxShadow = "0 0 8px #a855f7";
-        }
-
-        function updateUIState() {
-            const statusBadge = document.getElementById('sysStatus');
-            const px = document.getElementById('pickX'); const py = document.getElementById('pickY'); const pz = document.getElementById('pickZ');
-            const dx = document.getElementById('placeX'); const dy = document.getElementById('placeY'); const dz = document.getElementById('placeZ');
-            const btnRun = document.getElementById('workflowBtn');
-            const btnOverride = document.getElementById('overrideBtn');
-            const btnHome = document.getElementById('homeBtn');
-            
-            const manualInputs = [];
-            for(let i=1; i<=6; i++) {
-                manualInputs.push(document.getElementById(`q${i}`));
-                manualInputs.push(document.getElementById(`num${i}`));
-            }
-
-            if (appState === 'DISCONNECTED') {
-                statusBadge.className = 'status-badge status-idle'; statusBadge.innerText = 'System Offline';
-                px.disabled = py.disabled = pz.disabled = true; dx.disabled = dy.disabled = dz.disabled = true;
-                btnRun.disabled = true; btnOverride.disabled = true; btnHome.disabled = true;
-                manualInputs.forEach(el => el.disabled = true);
-            } 
-            else if (appState === 'WAITING_FOR_OBJ') {
-                statusBadge.className = 'status-badge status-running'; statusBadge.innerText = 'Conveyor Running. Waiting for Sensor...';
-                px.disabled = py.disabled = pz.disabled = true; dx.disabled = dy.disabled = dz.disabled = true;
-                btnRun.disabled = true; btnOverride.disabled = false; btnHome.disabled = false;
-                manualInputs.forEach(el => el.disabled = false); 
-            }
-            else if (appState === 'READY_TO_PICK') {
-                statusBadge.className = 'status-badge status-detect'; statusBadge.innerText = isSimulation ? 'SIMULATION MODE ACTIVE' : 'Object Detected! Ready for Pickup.';
-                px.disabled = py.disabled = pz.disabled = false; dx.disabled = dy.disabled = dz.disabled = false;
-                btnRun.disabled = false; btnOverride.disabled = false; btnHome.disabled = false;
-                manualInputs.forEach(el => el.disabled = false);
-            }
-            else if (appState === 'WORKING') {
-                statusBadge.className = 'status-badge status-working'; statusBadge.innerText = 'Executing Trajectory... Do Not Approach';
-                px.disabled = py.disabled = pz.disabled = true; dx.disabled = dy.disabled = dz.disabled = true;
-                btnRun.disabled = true; btnOverride.disabled = true; btnHome.disabled = true;
-                manualInputs.forEach(el => el.disabled = true); 
-            }
-        }
-
-        // --- BACKGROUND POLLING FOR IR SENSOR ---
-        setInterval(async () => {
-            if (appState !== 'WAITING_FOR_OBJ' || isSimulation) return; 
-            try {
-                let res = await fetch('http://127.0.0.1:8000/check_status');
-                let data = await res.json();
-                if(data.status === "success" && data.message === "OBJ_DETECTED") {
-                    appState = 'READY_TO_PICK';
-                    updateUIState();
-                }
-            } catch(e) {}
-        }, 800); 
-
-        // --- USB / SERIAL ---
-        async function connectSerial() {
-            let port = document.getElementById('comPort').value;
-            let statusText = document.getElementById('btText');
-            let indicator = document.getElementById('btIndicator');
-            let btn = document.getElementById('connectBtn');
-            
-            isSimulation = false; 
-            btn.innerText = "Connecting..."; statusText.innerText = "Connecting..."; indicator.style.background = "#f59e0b";
-            try {
-                const response = await fetch(`http://127.0.0.1:8000/connect_serial?port=${port}`);
-                const data = await response.json();
-                if (data.status === "success") {
-                    btn.innerText = "Connected";
-                    statusText.innerText = `Connected`; indicator.style.background = "#10b981"; indicator.style.boxShadow = "0 0 8px #10b981";
-                    appState = 'WAITING_FOR_OBJ';
-                    updateUIState();
-                } else {
-                    btn.innerText = "Error"; statusText.innerText = `Error`; indicator.style.background = "#ef4444"; indicator.style.boxShadow = "0 0 8px #ef4444";
-                }
-            } catch (e) { btn.innerText = "Failed"; statusText.innerText = "Failed"; indicator.style.background = "#ef4444"; indicator.style.boxShadow = "0 0 8px #ef4444";}
-        }
-
-        function pushToHardware(q) {
-            if (!isSimulation) {
-                fetch(`http://127.0.0.1:8000/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`).catch(e=>{});
-            }
-        }
-        
-        function sendCommand(cmd) {
-            if (!isSimulation) {
-                fetch(`http://127.0.0.1:8000/send_command?cmd=${cmd}`).catch(e=>{});
-            }
-        }
-
-        function forceConveyorOverride() {
-            sendCommand('RESUME');
-            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ';
-            updateUIState();
-        }
-
-        // --- MANUAL SLIDER UPDATES ---
-        function syncFromInput(i) {
-            let numInput = document.getElementById(`num${i}`);
-            let slider = document.getElementById(`q${i}`);
-            let val = parseFloat(numInput.value);
-            let min = parseFloat(numInput.min); let max = parseFloat(numInput.max);
-            if (val < min) val = min; if (val > max) val = max;
-            numInput.value = val.toFixed(1); slider.value = val;
-            updateRobot();
-        }
-
-        async function updateRobot() {
-            let q = [];
-            for (let i = 1; i <= 6; i++) {
-                let val = document.getElementById(`q${i}`).value;
-                if(document.activeElement !== document.getElementById(`num${i}`)) {
-                    document.getElementById(`num${i}`).value = parseFloat(val).toFixed(1);
-                }
-                q.push(val);
-            }
-            pushToHardware(q); 
-            try {
-                const response = await fetch(`http://127.0.0.1:8000/kinematics?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`);
-                const data = await response.json();
-                if (data.status === "success") renderArm(data.joints);
-            } catch (error) { console.error("Server connection failed", error); }
-        }
-
-        // --- THE DYNAMIC MOVEMENT ENGINE EXECUTOR ---
-        function executeMovement(endpoint, x, y, z) {
-            return new Promise(async (resolve, reject) => {
-                let cur = [];
-                for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
-
-                try {
-                    const response = await fetch(`http://127.0.0.1:8000/${endpoint}?x=${x}&y=${y}&z=${z}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
-                    const data = await response.json();
-
-                    if (data.status === "success" || data.status === "warning") {
-                        let frames = data.frames;
-                        let currentFrame = 0;
-                        let lastTime = 0;
-
-                        function playNextFrame(timestamp) {
-                            if (currentFrame >= frames.length) { resolve(); return; }
-                            
-                            if (timestamp - lastTime >= 33) {
-                                let frame = frames[currentFrame];
-                                for (let i = 1; i <= 6; i++) {
-                                    document.getElementById(`q${i}`).value = frame.angles[i-1];
-                                    document.getElementById(`num${i}`).value = parseFloat(frame.angles[i-1]).toFixed(1);
-                                }
-                                renderArm(frame.joints);
-                                pushToHardware(frame.angles);
-                                currentFrame++;
-                                lastTime = timestamp;
-                            }
-                            requestAnimationFrame(playNextFrame); 
-                        }
-                        requestAnimationFrame(playNextFrame);
-                    } else { reject(); }
-                } catch (error) { reject(); }
-            });
-        }
-
-        async function triggerHomeSequence() {
-            appState = 'WORKING';
-            updateUIState();
-            await goHome();
-            appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ';
-            updateUIState();
-        }
-
-        function goHome() {
-            return new Promise((resolve) => {
-                document.getElementById('moveMode').innerText = "PTP (HOMING)";
-                let startAngles = [];
-                for (let i = 1; i <= 6; i++) startAngles.push(parseFloat(document.getElementById(`q${i}`).value));
-                
-                let targetAngles = [0, 0, 0, 0, 0, 0];
-                let totalFrames = 30; let currentFrame = 0;
-
-                function animateHome() {
-                    if (currentFrame > totalFrames) {
-                        document.getElementById('moveMode').innerText = "IDLE";
-                        resolve(); return; 
-                    }
-                    let progress = currentFrame / totalFrames;
-                    let easeProgress = progress * progress * (3 - 2 * progress); 
-                    let currentAngles = [];
-                    for (let i = 1; i <= 6; i++) {
-                        let val = startAngles[i-1] + (targetAngles[i-1] - startAngles[i-1]) * easeProgress;
-                        
-                        document.getElementById(`q${i}`).value = val;
-                        document.getElementById(`num${i}`).value = val.toFixed(1);
-                        
-                        currentAngles.push(val);
-                    }
-                    pushToHardware(currentAngles);
-                    fetch(`http://127.0.0.1:8000/kinematics?q1=${currentAngles[0]}&q2=${currentAngles[1]}&q3=${currentAngles[2]}&q4=${currentAngles[3]}&q5=${currentAngles[4]}&q6=${currentAngles[5]}`)
-                        .then(r => r.json()).then(d => { if(d.status === "success") renderArm(d.joints); });
-                    
-                    currentFrame++; setTimeout(animateHome, 33); 
-                }
-                animateHome(); 
-            });
-        }
-
-        const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-        // ==============================================================================
-        // THE FULL HYBRID INDUSTRIAL WORKFLOW
-        // ==============================================================================
-        async function executeHybridSequence() {
-            appState = 'WORKING';
-            updateUIState();
-            
-            pathPoints.length = 0; pathGeometry.setFromPoints(pathPoints);
-
-            let px = parseFloat(document.getElementById('pickX').value);
-            let py = parseFloat(document.getElementById('pickY').value);
-            let pz = parseFloat(document.getElementById('pickZ').value);
-            let dx = parseFloat(document.getElementById('placeX').value);
-            let dy = parseFloat(document.getElementById('placeY').value);
-            let dz = parseFloat(document.getElementById('placeZ').value);
-
-            let hoverZ = Math.max(pz, dz) + 50.0; 
-
-            try {
-                document.getElementById('moveMode').innerText = "PTP (TRANSFER)";
-                await executeMovement('ik_joint_space', px, py, hoverZ);
-                
-                document.getElementById('moveMode').innerText = "LIN (PLUNGE)";
-                await executeMovement('ik_cartesian', px, py, pz);
-                
-                sendCommand('SUCK_ON');
-                await sleep(600); 
-
-                document.getElementById('moveMode').innerText = "LIN (EXTRACT)";
-                await executeMovement('ik_cartesian', px, py, hoverZ);
-
-                document.getElementById('moveMode').innerText = "PTP (TRANSFER)";
-                await executeMovement('ik_joint_space', dx, dy, hoverZ);
-
-                document.getElementById('moveMode').innerText = "LIN (PLACE)";
-                await executeMovement('ik_cartesian', dx, dy, dz);
-
-                sendCommand('SUCK_OFF');
-                await sleep(500); 
-
-                document.getElementById('moveMode').innerText = "LIN (EXTRACT)";
-                await executeMovement('ik_cartesian', dx, dy, hoverZ);
-                
-                await goHome();
-                sendCommand('RESUME'); 
-                
-                if (isSimulation) {
-                    appState = 'READY_TO_PICK';
-                } else {
-                    appState = 'WAITING_FOR_OBJ';
-                }
-                updateUIState();
-
-            } catch (error) {
-                alert("Sequence Aborted: Target Coordinate or Hover Coordinate exceeds physical reach constraints.");
-                document.getElementById('moveMode').innerText = "ERROR";
-                
-                appState = isSimulation ? 'READY_TO_PICK' : 'READY_TO_PICK';
-                updateUIState();
-            }
-        }
-
-        // --- RENDER ARM HELPER ---
-        function renderArm(joints) {
+        function renderArm(joints, matrices) {
             function updateCylinder(cylinder, pointA, pointB) {
                 const dir = new THREE.Vector3().subVectors(pointB, pointA);
                 if(dir.length() === 0) return; 
@@ -476,9 +513,28 @@
                 let pt = new THREE.Vector3(joints[i][0], joints[i][2], -joints[i][1]); 
                 if (!jointNodes[i]) {
                     let mesh = new THREE.Mesh(new THREE.SphereGeometry(12, 16, 16), matNode);
-                    scene.add(mesh); jointNodes[i] = mesh;
+                    let axesHelper = new THREE.AxesHelper(75); 
+                    mesh.add(axesHelper);
+                    scene.add(mesh); 
+                    jointNodes[i] = mesh;
+                    mesh.matrixAutoUpdate = false; 
                 }
-                jointNodes[i].position.copy(pt);
+                
+                if (matrices && matrices[i]) {
+                    let pyMat = matrices[i];
+                    let m = new THREE.Matrix4().set(
+                        pyMat[0][0], pyMat[0][1], pyMat[0][2], pyMat[0][3],
+                        pyMat[1][0], pyMat[1][1], pyMat[1][2], pyMat[1][3],
+                        pyMat[2][0], pyMat[2][1], pyMat[2][2], pyMat[2][3],
+                        pyMat[3][0], pyMat[3][1], pyMat[3][2], pyMat[3][3]
+                    );
+                    let m3js = new THREE.Matrix4().multiplyMatrices(R2T, m);
+                    m3js.setPosition(pt);
+                    jointNodes[i].matrix.copy(m3js);
+                    jointNodes[i].updateMatrixWorld(true);
+                } else {
+                    jointNodes[i].position.copy(pt);
+                }
 
                 if (i < joints.length - 1) {
                     let nextPt = new THREE.Vector3(joints[i+1][0], joints[i+1][2], -joints[i+1][1]);
@@ -502,17 +558,551 @@
             document.getElementById('outZ').innerText = ee[2].toFixed(2);
         }
 
-        async function init3DViewer() {
-            try {
-                let res = await fetch(`http://127.0.0.1:8000/kinematics?q1=0&q2=0&q3=0&q4=0&q5=0&q6=0`);
-                let data = await res.json();
-                if (data.status === "success") renderArm(data.joints);
-            } catch (e) {
-                renderArm([[0,0,0], [0,0,125], [0,0,285], [0,0,335], [0,0,620], [0,0,700]]);
+        // ==============================================================================
+        // E-STOP & STATE MACHINE LOGIC
+        // ==============================================================================
+        let appState = 'DISCONNECTED'; 
+        let isSimulation = false;
+        let isEStop = false;
+        let isAutoBatchActive = false;
+
+        function toggleEStop() {
+            let btn = document.getElementById('globalEstopBtn');
+            if (!isEStop) {
+                isEStop = true;
+                fetch(`/send_command?cmd=ESTOP`).catch(e=>{}); 
+                appState = 'ESTOPPED';
+                isAutoBatchActive = false; 
+                updateDropZoneUI();
+                updateUIState();
+                
+                btn.innerText = "RESET SYSTEM";
+                btn.style.background = "var(--accent-orange)";
+                btn.style.boxShadow = "0 4px 15px rgba(245,158,11,0.4)";
+                
+                document.getElementById('btIndicator').style.background = "var(--danger)";
+                document.getElementById('btIndicator').style.boxShadow = "0 0 8px var(--danger)";
+                document.getElementById('btText').innerText = "E-STOP ACTIVE";
+            } else {
+                isEStop = false;
+                fetch(`/send_command?cmd=RESET`).catch(e=>{});
+                
+                appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; 
+                fetch(`/send_command?cmd=RESUME`).catch(e=>{});
+                
+                updateUIState();
+                
+                btn.innerText = "EMERGENCY STOP";
+                btn.style.background = ""; 
+                btn.style.boxShadow = ""; 
+                
+                document.getElementById('btIndicator').style.background = isSimulation ? "#a855f7" : "#10b981";
+                document.getElementById('btIndicator').style.boxShadow = isSimulation ? "0 0 8px #a855f7" : "0 0 8px #10b981";
+                document.getElementById('btText').innerText = isSimulation ? "Simulation Mode" : "Connected";
             }
         }
-        init3DViewer();
-        updateUIState(); // Ensure boot state locks sliders properly
+
+        async function toggleSimMode() {
+            let checkbox = document.getElementById('simToggleSwitch');
+            let label = document.getElementById('simToggleLabel');
+            
+            if (!isSimulation) {
+                isSimulation = true; 
+                if (checkbox) checkbox.checked = true; 
+                appState = 'READY_TO_PICK'; 
+                updateUIState();
+                
+                await fetch('/set_simulation?state=true').catch(e=>{});
+                
+                document.getElementById('sysStatus').innerText = 'SIMULATION MODE';
+                document.getElementById('btText').innerText = "Simulation Mode";
+                document.getElementById('btIndicator').style.background = "#a855f7";
+                document.getElementById('btIndicator').style.boxShadow = "0 0 8px #a855f7";
+                
+                label.innerText = "Simulation Mode: ON";
+                label.style.color = "var(--danger)";
+            } else {
+                isSimulation = false; 
+                isAutoBatchActive = false; 
+                if (checkbox) checkbox.checked = false; 
+                appState = 'DISCONNECTED'; 
+                updateUIState();
+                
+                await fetch('/set_simulation?state=false').catch(e=>{});
+                
+                document.getElementById('btText').innerText = "Disconnected";
+                document.getElementById('btIndicator').style.background = "var(--danger)";
+                document.getElementById('btIndicator').style.boxShadow = "0 0 8px var(--danger)";
+                
+                label.innerText = "Simulation Mode: OFF";
+                label.style.color = "var(--accent-purple)";
+                document.getElementById('connectBtn').innerText = "Connect";
+            }
+        }
+
+        function toggleAutoBatch() {
+            if (customDropZones.length === 0) {
+                alert("Please add at least one drop zone to start the Auto Batch.");
+                return;
+            }
+            isAutoBatchActive = true;
+            currentDropIndex = 0;
+            updateDropZoneUI();
+            
+            // Clear telemetry entirely for the start of the new batch
+            clearCharts();
+            isRecording = true;
+            
+            if (appState === 'READY_TO_PICK') {
+                executeHybridSequence();
+            } else {
+                appState = 'WAITING_FOR_OBJ';
+                fetch(`/send_command?cmd=RESUME`).catch(e=>{});
+                updateUIState();
+            }
+        }
+
+        function stopAutoBatch() {
+            isAutoBatchActive = false;
+            currentDropIndex = 0;
+            updateDropZoneUI();
+            updateUIState();
+        }
+
+        function updateUIState() {
+            const statusBadge = document.getElementById('sysStatus');
+            const recIndicator = document.getElementById('recordingIndicator');
+            const elementsToToggle = [
+                'pickX', 'pickY', 'pickZ', 'placeX', 'placeY', 'placeZ', 'manX', 'manY', 'manZ',
+                'homeBtn', 'manualMoveBtn'
+            ];
+            for(let i=1; i<=6; i++) { elementsToToggle.push(`q${i}`); elementsToToggle.push(`num${i}`); }
+
+            const setDisabled = (state) => {
+                elementsToToggle.forEach(id => {
+                    let el = document.getElementById(id);
+                    if(el) el.disabled = state;
+                });
+                
+                let zoneLock = state || isAutoBatchActive;
+                document.getElementById('addZoneBtn').disabled = zoneLock;
+                document.getElementById('clearZonesBtn').disabled = zoneLock;
+                document.querySelectorAll('.zone-edit-input').forEach(el => el.disabled = zoneLock);
+            };
+
+            const wBtn = document.getElementById('workflowBtn');
+            const updateWorkflowBtn = (forceDisable = false) => {
+                if (!wBtn) return;
+                if (forceDisable) {
+                    wBtn.disabled = true;
+                    return;
+                }
+                
+                if (isAutoBatchActive) {
+                    wBtn.innerText = "🛑 Stop Auto Batch";
+                    wBtn.style.background = "var(--danger)";
+                    wBtn.onclick = stopAutoBatch;
+                    wBtn.disabled = false; 
+                } else {
+                    wBtn.innerText = "Start Auto Batch";
+                    wBtn.style.background = ""; 
+                    wBtn.onclick = toggleAutoBatch;
+                    wBtn.disabled = false;
+                }
+            };
+            
+            // Link UI indicator to Recording Logic
+            recIndicator.style.display = isRecording ? 'flex' : 'none';
+
+            if (appState === 'DISCONNECTED') {
+                statusBadge.className = 'status-badge status-idle'; statusBadge.innerText = 'System Offline';
+                statusBadge.style = "";
+                setDisabled(true);
+                updateWorkflowBtn(true);
+                document.getElementById('globalEstopBtn').disabled = true;
+            } 
+            else if (appState === 'ESTOPPED') {
+                statusBadge.className = 'status-badge status-detect'; 
+                statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+                statusBadge.style.color = '#ef4444';
+                statusBadge.style.border = '1px solid #ef4444';
+                statusBadge.innerText = 'SYSTEM HALTED (E-STOP)';
+                setDisabled(true);
+                updateWorkflowBtn(true);
+                document.getElementById('globalEstopBtn').disabled = false;
+            }
+            else {
+                statusBadge.style = "";
+                document.getElementById('globalEstopBtn').disabled = false;
+
+                if (appState === 'WAITING_FOR_OBJ') {
+                    statusBadge.className = 'status-badge status-running'; 
+                    statusBadge.innerText = isAutoBatchActive ? 'AUTO BATCH: Waiting for Object...' : 'Conveyor Running. Waiting...';
+                    setDisabled(false);
+                    updateWorkflowBtn(false);
+                } else if (appState === 'READY_TO_PICK') {
+                    statusBadge.className = 'status-badge status-detect'; 
+                    statusBadge.innerText = isSimulation ? 'SIMULATION MODE' : 'Object Detected! Ready.';
+                    setDisabled(false);
+                    updateWorkflowBtn(false);
+                } else if (appState === 'WORKING') {
+                    statusBadge.className = 'status-badge status-working'; 
+                    statusBadge.innerText = isAutoBatchActive ? `AUTO BATCH: Moving to Zone ${currentDropIndex + 1}` : 'Executing Macro Trajectory...';
+                    setDisabled(true);
+                    if (isAutoBatchActive) {
+                        updateWorkflowBtn(false); 
+                    } else {
+                        updateWorkflowBtn(true);
+                    }
+                }
+            }
+        }
+
+        setInterval(async () => {
+            if (appState !== 'WAITING_FOR_OBJ' || isSimulation || isEStop) return; 
+            try {
+                let res = await fetch('/check_status');
+                let data = await res.json();
+                if(data.status === "success" && data.message === "OBJ_DETECTED") {
+                    appState = 'READY_TO_PICK'; updateUIState();
+                    if (isAutoBatchActive) {
+                        setTimeout(executeHybridSequence, 400);
+                    }
+                }
+            } catch(e) {}
+        }, 800); 
+
+        // ==============================================================================
+        // MULTIPLE DROP ZONE LOGIC
+        // ==============================================================================
+        let customDropZones = [];
+        let currentDropIndex = 0;
+
+        function addDropZone() {
+            let x = parseFloat(document.getElementById('placeX').value);
+            let y = parseFloat(document.getElementById('placeY').value);
+            let z = parseFloat(document.getElementById('placeZ').value);
+            
+            customDropZones.push({x, y, z});
+            updateDropZoneUI();
+        }
+
+        function clearDropZones() {
+            customDropZones = [];
+            currentDropIndex = 0;
+            updateDropZoneUI();
+        }
+        
+        function editZone(index, axis, val) {
+            let parsedVal = parseFloat(val);
+            if (!isNaN(parsedVal)) {
+                customDropZones[index][axis] = parsedVal;
+            }
+        }
+
+        function updateDropZoneUI() {
+            let container = document.getElementById('dropZoneListUI');
+            if (customDropZones.length === 0) {
+                container.innerHTML = "<em>No custom zones added. Will use default coordinate above.</em>";
+                return;
+            }
+            
+            let html = "<div style='display: flex; flex-direction: column; gap: 8px;'>";
+            customDropZones.forEach((zone, index) => {
+                let isNext = (index === currentDropIndex) ? 
+                    "<div title='Next Target' style='width: 12px; height: 12px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); margin-left: 8px; flex-shrink: 0;'></div>" : 
+                    "<div style='width: 12px; height: 12px; border-radius: 50%; background: var(--border-color); margin-left: 8px; flex-shrink: 0;'></div>";
+                    
+                html += `
+                <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.2); padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <span style="font-weight: bold; color: var(--accent-cyan); font-size: 0.8rem; min-width: 45px;">Zone ${index + 1}:</span>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <span style="font-size: 0.75rem;">X</span>
+                        <input type="number" class="zone-edit-input" value="${zone.x}" onchange="editZone(${index}, 'x', this.value)" style="width: 45px !important; padding: 4px !important; font-size: 0.75rem; background: rgba(15, 23, 42, 0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
+                        <span style="font-size: 0.75rem;">Y</span>
+                        <input type="number" class="zone-edit-input" value="${zone.y}" onchange="editZone(${index}, 'y', this.value)" style="width: 45px !important; padding: 4px !important; font-size: 0.75rem; background: rgba(15, 23, 42, 0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
+                        <span style="font-size: 0.75rem;">Z</span>
+                        <input type="number" class="zone-edit-input" value="${zone.z}" onchange="editZone(${index}, 'z', this.value)" style="width: 45px !important; padding: 4px !important; font-size: 0.75rem; background: rgba(15, 23, 42, 0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
+                    </div>
+                    ${isNext}
+                </div>`;
+            });
+            html += "</div>";
+            container.innerHTML = html;
+            
+            if (appState === 'WORKING' || appState === 'ESTOPPED' || isAutoBatchActive) {
+                document.querySelectorAll('.zone-edit-input').forEach(el => el.disabled = true);
+            }
+        }
+
+        // ==============================================================================
+        // HARDWARE COMMS & THE MACRO PLAYER
+        // ==============================================================================
+        async function connectSerial() {
+            let port = document.getElementById('comPort').value;
+            let statusText = document.getElementById('btText');
+            let indicator = document.getElementById('btIndicator');
+            let btn = document.getElementById('connectBtn');
+            let checkbox = document.getElementById('simToggleSwitch');
+            let label = document.getElementById('simToggleLabel');
+            
+            isSimulation = false; 
+            isAutoBatchActive = false;
+            if (checkbox) checkbox.checked = false;
+            if (label) {
+                label.innerText = "Simulation Mode: OFF";
+                label.style.color = "var(--accent-purple)";
+            }
+            
+            await fetch('/set_simulation?state=false').catch(e=>{});
+            
+            btn.innerText = "Connecting..."; statusText.innerText = "Connecting..."; indicator.style.background = "#f59e0b";
+            try {
+                const response = await fetch(`/connect_serial?port=${port}`);
+                const data = await response.json();
+                if (data.status === "success") {
+                    btn.innerText = "Connected"; statusText.innerText = `Connected`; indicator.style.background = "#10b981"; indicator.style.boxShadow = "0 0 8px #10b981";
+                    appState = 'WAITING_FOR_OBJ'; updateUIState();
+                } else {
+                    btn.innerText = "Error"; statusText.innerText = `Error`; indicator.style.background = "#ef4444"; indicator.style.boxShadow = "0 0 8px #ef4444";
+                }
+            } catch (e) { btn.innerText = "Failed"; statusText.innerText = "Failed"; indicator.style.background = "#ef4444"; indicator.style.boxShadow = "0 0 8px #ef4444";}
+        }
+
+        function syncFromInput(i) {
+            let numInput = document.getElementById(`num${i}`); let slider = document.getElementById(`q${i}`);
+            let val = parseFloat(numInput.value); let min = parseFloat(numInput.min); let max = parseFloat(numInput.max);
+            if (val < min) val = min; if (val > max) val = max;
+            numInput.value = val.toFixed(1); slider.value = val;
+            updateRobot();
+        }
+
+        async function updateRobot() {
+            let q = [];
+            for (let i = 1; i <= 6; i++) {
+                let val = document.getElementById(`q${i}`).value;
+                if(document.activeElement !== document.getElementById(`num${i}`)) document.getElementById(`num${i}`).value = parseFloat(val).toFixed(1);
+                q.push(val);
+            }
+            fetch(`/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}&sol=0`).catch(e=>{});
+        }
+
+        function executeMacro(url) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    if (data.status === "success") {
+                        setTimeout(() => {
+                            let checkInterval = setInterval(async () => {
+                                try {
+                                    let res = await fetch('/telemetry');
+                                    let state = await res.json();
+                                    if (state.status === "IDLE" || state.status === "ESTOPPED") {
+                                        clearInterval(checkInterval);
+                                        resolve(); 
+                                    }
+                                } catch(e){}
+                            }, 100);
+                        }, 200); 
+                    } else { reject(); }
+                } catch (error) { reject(); }
+            });
+        }
+
+        async function triggerHomeSequence() {
+            clearCharts(); isRecording = true;
+            appState = 'WORKING'; updateUIState();
+            let cur = []; for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
+            
+            try {
+                await executeMacro(`/inverse_kinematics?mode=macro_home&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
+            } catch (e) { alert("Homing Aborted"); }
+            
+            if (!isEStop) { appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState(); }
+        }
+
+        async function executeManualMovement() {
+            clearCharts(); isRecording = true;
+            appState = 'WORKING'; updateUIState();
+            let x = parseFloat(document.getElementById('manX').value);
+            let y = parseFloat(document.getElementById('manY').value);
+            let z = parseFloat(document.getElementById('manZ').value);
+            let cur = []; for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
+            
+            try {
+                await executeMacro(`/inverse_kinematics?mode=macro_manual&x=${x}&y=${y}&z=${z}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
+            } catch (e) { if (!isEStop) { alert("Sequence Aborted: Target coordinate exceeds physical reach constraints."); } }
+            
+            if (!isEStop) { appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState(); }
+        }
+
+        async function executeHybridSequence() {
+            appState = 'WORKING'; updateUIState();
+            pathPoints.length = 0; pathGeometry.setFromPoints(pathPoints);
+            
+            // Mark the start boundary of this specific zone cycle
+            let currentZoneStartIdx = masterCartesian.pos[0].length; 
+
+            let px = parseFloat(document.getElementById('pickX').value);
+            let py = parseFloat(document.getElementById('pickY').value);
+            let pz = parseFloat(document.getElementById('pickZ').value);
+            
+            let dx, dy, dz;
+
+            if (customDropZones.length > 0) {
+                let targetZone = customDropZones[currentDropIndex];
+                dx = targetZone.x;
+                dy = targetZone.y;
+                dz = targetZone.z;
+            } else {
+                dx = parseFloat(document.getElementById('placeX').value);
+                dy = parseFloat(document.getElementById('placeY').value);
+                dz = parseFloat(document.getElementById('placeZ').value);
+            }
+
+            let cur = []; for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
+
+            try {
+                await executeMacro(`/inverse_kinematics?mode=macro_auto&px=${px}&py=${py}&pz=${pz}&dx=${dx}&dy=${dy}&dz=${dz}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
+                
+                // Mark the end boundary of this cycle and add it to our tracking array
+                let currentZoneEndIdx = masterCartesian.pos[0].length;
+                zoneBoundaries.push({ start: currentZoneStartIdx, end: currentZoneEndIdx });
+                updateZoneDropdown();
+                
+                if (customDropZones.length > 0 && !isEStop) {
+                    currentDropIndex++;
+                    if (currentDropIndex >= customDropZones.length) {
+                        isAutoBatchActive = false; // Finishes the batch completely!
+                        currentDropIndex = 0;
+                    }
+                    updateDropZoneUI();
+                }
+
+            } catch (error) {
+                if (!isEStop) {
+                    alert("Sequence Aborted: Target Coordinate or Hover Coordinate exceeds physical reach constraints.");
+                    isAutoBatchActive = false; 
+                    updateDropZoneUI();
+                }
+            }
+            
+            if (!isEStop) { 
+                appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; 
+                updateUIState(); 
+                
+                if (isAutoBatchActive && isSimulation) {
+                    setTimeout(executeHybridSequence, 1000);
+                }
+            }
+        }
+
+        // ==============================================================================
+        // MASTER SCADA POLLING LOOP (Reads State from Python Live)
+        // ==============================================================================
+        setInterval(async () => {
+            try {
+                let res = await fetch('/telemetry');
+                let data = await res.json();
+
+                // 1. Sync 3D Geometry
+                if (data.joints && data.matrices) {
+                    renderArm(data.joints, data.matrices);
+                }
+
+                // 2. Sync UI Sliders
+                if (data.status === "MOVING") {
+                    for (let i = 1; i <= 6; i++) {
+                        let angle = parseFloat(data.angles[i-1]).toFixed(1);
+                        document.getElementById(`q${i}`).value = angle;
+                        if(document.activeElement !== document.getElementById(`num${i}`)) {
+                            document.getElementById(`num${i}`).value = angle;
+                        }
+                    }
+                    document.getElementById('moveMode').innerText = "MOVING";
+                    document.getElementById('moveMode').style.color = "var(--accent-purple)";
+                } else if (data.status === "IDLE") {
+                    document.getElementById('moveMode').innerText = "IDLE";
+                    document.getElementById('moveMode').style.color = "var(--text-muted)";
+                } else if (data.status === "ESTOPPED") {
+                    document.getElementById('moveMode').innerText = "HALTED";
+                    document.getElementById('moveMode').style.color = "var(--danger)";
+                }
+
+                // 3. Process the "Whole Process" Accumulated Telemetry Math
+                if (data.joints) {
+                    let isMoving = (data.status === "MOVING");
+                    
+                    // The batch is completely finished ONLY when appState drops back to idle statuses AND Auto Batch flag is false
+                    let isSequenceFinished = (appState !== 'WORKING' && !isAutoBatchActive);
+
+                    // Cut the recording if hardware is fully stopped and the overarching sequence code confirms completion
+                    if (isRecording && !isMoving && isSequenceFinished) {
+                        isRecording = false;
+                        renderCharts(); // Render Final Graph securely
+                        updateUIState(); // Hide Recording indicator
+                    }
+
+                    if (isRecording) {
+                        let ee = data.joints[data.joints.length - 1];
+                        
+                        // Push to MASTER arrays instead of directly to charts
+                        masterCartesian.pos[0].push(ee[0]);
+                        masterCartesian.pos[1].push(ee[1]);
+                        masterCartesian.pos[2].push(ee[2]);
+
+                        masterCartesian.vel[0].push(data.velocity[0]);
+                        masterCartesian.vel[1].push(data.velocity[1]);
+                        masterCartesian.vel[2].push(data.velocity[2]);
+
+                        masterCartesian.acc[0].push(data.acceleration[0]);
+                        masterCartesian.acc[1].push(data.acceleration[1]);
+                        masterCartesian.acc[2].push(data.acceleration[2]);
+
+                        // Store data for ALL 6 joints globally so dropdown swapping works post-batch
+                        for (let i = 0; i < 6; i++) {
+                            jointHistory.pos[i].push(parseFloat(data.angles[i]));
+                            jointHistory.vel[i].push(parseFloat(data.joint_velocity[i]));
+                            jointHistory.acc[i].push(parseFloat(data.joint_acceleration[i]));
+                        }
+
+                        // Live Update ONLY if viewing 'ALL' to save computational overhead
+                        if (document.getElementById('zoneSelect').value === 'ALL') {
+                            let lbl = '';
+                            posChart.data.labels.push(lbl);
+                            velChart.data.labels.push(lbl);
+                            accChart.data.labels.push(lbl);
+                            jointPosChart.data.labels.push(lbl);
+                            jointVelChart.data.labels.push(lbl);
+                            jointAccChart.data.labels.push(lbl);
+                            
+                            posChart.data.datasets[0].data.push(ee[0]);
+                            posChart.data.datasets[1].data.push(ee[1]);
+                            posChart.data.datasets[2].data.push(ee[2]);
+                            velChart.data.datasets[0].data.push(data.velocity[0]);
+                            velChart.data.datasets[1].data.push(data.velocity[1]);
+                            velChart.data.datasets[2].data.push(data.velocity[2]);
+                            accChart.data.datasets[0].data.push(data.acceleration[0]);
+                            accChart.data.datasets[1].data.push(data.acceleration[1]);
+                            accChart.data.datasets[2].data.push(data.acceleration[2]);
+                            
+                            let selIdx = parseInt(document.getElementById('jointSelect').value);
+                            jointPosChart.data.datasets[0].data.push(parseFloat(data.angles[selIdx]));
+                            jointVelChart.data.datasets[0].data.push(parseFloat(data.joint_velocity[selIdx]));
+                            jointAccChart.data.datasets[0].data.push(parseFloat(data.joint_acceleration[selIdx]));
+
+                            // Visually update the graphs intermittently to show real-time progress without lagging the browser
+                            tickCounter++;
+                            if (tickCounter % 15 === 0) updateAllCharts();
+                        }
+                    }
+                }
+            } catch(e) {}
+        }, 20); // Exactly 50Hz sync to match the backend trajectory generator
+        
+        updateUIState();
     </script>
 </body> 
 </html>
