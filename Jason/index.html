@@ -72,7 +72,7 @@
         #plot-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
         
         #telemetry-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; display: none; flex-direction: column; gap: 20px; padding: 80px 30px 30px 30px; box-sizing: border-box; overflow-y: auto; background: var(--bg-main); z-index: 10; }
-        .chart-card { background: var(--bg-card); border-radius: 12px; padding: 15px; border: 1px solid var(--border-color); height: 250px; position: relative; flex-shrink: 0; }
+        .chart-card { background: var(--bg-card); border-radius: 12px; padding: 15px 15px 25px 15px; border: 1px solid var(--border-color); height: 260px; position: relative; flex-shrink: 0; }
         .chart-card h3 { margin: 0 0 10px 0; color: #fff; font-size: 1rem; }
         
         /* Recording Indicator */
@@ -329,13 +329,28 @@
         }
 
         // ==============================================================================
-        // BATCH-RECORDING TELEMETRY GRAPHING (CHART.JS)
+        // BATCH-RECORDING TELEMETRY GRAPHING WITH TIME (X-AXIS)
         // ==============================================================================
         const chartOptions = {
             responsive: true, maintainAspectRatio: false, animation: false,
             elements: { point: { radius: 0 }, line: { tension: 0.4, borderWidth: 2 } },
             scales: {
-                x: { display: false }, 
+                x: { 
+                    display: true, 
+                    grid: { color: '#1e293b' }, // Subtle grid for the time axis
+                    ticks: { 
+                        color: '#94a3b8', 
+                        font: {family: 'JetBrains Mono'},
+                        maxTicksLimit: 12, // Prevents axis from getting crowded
+                        maxRotation: 0     // Keeps labels perfectly flat
+                    },
+                    title: { 
+                        display: true, 
+                        text: 'Time (Seconds)', 
+                        color: '#cbd5e1', 
+                        font: { family: 'Inter', size: 11, weight: 'bold' } 
+                    }
+                },
                 y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: {family: 'JetBrains Mono'} } }
             },
             plugins: { legend: { labels: { color: '#fff', font: {family: 'Inter', size: 11} } } }
@@ -428,7 +443,11 @@
                 }
             }
             
-            let labels = Array(Math.max(0, endIdx - startIdx)).fill('');
+            // Dynamically generate the X-Axis timeline labels based on 0.02s per frame
+            let labels = [];
+            for (let i = startIdx; i < endIdx; i++) {
+                labels.push((i * 0.02).toFixed(2));
+            }
             
             posChart.data.labels = labels;
             velChart.data.labels = labels;
@@ -1092,10 +1111,13 @@
                             jointHistory.vel[i].push(parseFloat(data.joint_velocity[i]));
                             jointHistory.acc[i].push(parseFloat(data.joint_acceleration[i]));
                         }
+                        
+                        // Calculate perfect time labels using 0.02s steps (matching 50Hz)
+                        let frameTime = ((masterCartesian.pos[0].length - 1) * 0.02).toFixed(2);
 
                         // Live Update ONLY if viewing 'ALL' to save computational overhead
                         if (document.getElementById('zoneSelect').value === 'ALL') {
-                            let lbl = '';
+                            let lbl = frameTime;
                             posChart.data.labels.push(lbl);
                             velChart.data.labels.push(lbl);
                             accChart.data.labels.push(lbl);
