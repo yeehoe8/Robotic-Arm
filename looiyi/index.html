@@ -55,7 +55,6 @@
         .btn-home { background: linear-gradient(135deg, var(--accent-orange), #d97706); }
         .btn-hybrid { background: linear-gradient(135deg, var(--accent-purple), #7e22ce); }
         
-        /* Dedicated E-Stop Styling */
         .btn-estop { background: linear-gradient(135deg, var(--danger), #b91c1c); color: white; margin-top: 15px; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); text-transform: uppercase; letter-spacing: 1px; }
         .btn-estop:hover:not(:disabled) { background: #b91c1c; box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6); }
 
@@ -81,7 +80,6 @@
         .bt-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 8px var(--danger); transition: 0.3s; }
         canvas { display: block; outline: none; }
 
-        /* Toggle Switch Styling */
         .toggle-container { display: flex; align-items: center; gap: 12px; margin-top: 15px; }
         .switch { position: relative; display: inline-block; width: 46px; height: 24px; flex-shrink: 0; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -211,7 +209,7 @@
             <div class="coord-line">X: <span id="outX">0.00</span> mm</div>
             <div class="coord-line">Y: <span id="outY">0.00</span> mm</div>
             <div class="coord-line">Z: <span id="outZ">0.00</span> mm</div>
-            <div style="font-size: 0.8rem; margin-top: 10px; color: #cbd5e1; border-top: 1px solid var(--border-color); padding-top: 5px;">Engine: <span id="moveMode" style="color: var(--accent-purple); width:auto;">IDLE</span></div>
+            <div style="font-size: 0.8rem; margin-top: 10px; color: #cbd5e1; border-top: 1px solid var(--border-color); padding-top: 5px;">Engine: <span id="moveMode" style="color: var(--text-muted); width:auto;">IDLE</span></div>
         </div>
 
         <div class="bt-floating-status">
@@ -292,7 +290,7 @@
             plugins: { legend: { labels: { color: '#fff', font: {family: 'Inter', size: 11} } } }
         };
 
-        const createChart = (ctxId, title, yLabel) => {
+        const createChart = (ctxId) => {
             return new Chart(document.getElementById(ctxId).getContext('2d'), {
                 type: 'line',
                 data: { labels: emptyLabels, datasets: [
@@ -308,59 +306,8 @@
         const velChart = createChart('velChart');
         const accChart = createChart('accChart');
 
-        let lastChartTime = performance.now();
-        let lastPos = {x: 0, y: 0, z: 0};
-        let lastVel = {x: 0, y: 0, z: 0};
-        let smoothedVel = {x: 0, y: 0, z: 0};
-        let smoothedAcc = {x: 0, y: 0, z: 0};
-
-        function pushTelemetryData(ee) {
-            let now = performance.now();
-            let dt = (now - lastChartTime) / 1000.0;
-            if (dt < 0.015) return; 
-            if (dt > 0.1) dt = 0.033; 
-            lastChartTime = now;
-
-            let curPos = { x: ee[0], y: ee[1], z: ee[2] };
-
-            let rawVx = (curPos.x - lastPos.x) / dt;
-            let rawVy = (curPos.y - lastPos.y) / dt;
-            let rawVz = (curPos.z - lastPos.z) / dt;
-
-            const alphaV = 0.25; 
-            smoothedVel.x = (alphaV * rawVx) + ((1 - alphaV) * smoothedVel.x);
-            smoothedVel.y = (alphaV * rawVy) + ((1 - alphaV) * smoothedVel.y);
-            smoothedVel.z = (alphaV * rawVz) + ((1 - alphaV) * smoothedVel.z);
-
-            let rawAx = (smoothedVel.x - lastVel.x) / dt;
-            let rawAy = (smoothedVel.y - lastVel.y) / dt;
-            let rawAz = (smoothedVel.z - lastVel.z) / dt;
-
-            const alphaA = 0.15;
-            smoothedAcc.x = (alphaA * rawAx) + ((1 - alphaA) * smoothedAcc.x);
-            smoothedAcc.y = (alphaA * rawAy) + ((1 - alphaA) * smoothedAcc.y);
-            smoothedAcc.z = (alphaA * rawAz) + ((1 - alphaA) * smoothedAcc.z);
-
-            const updateDataset = (chart, newData) => {
-                chart.data.datasets[0].data.shift(); chart.data.datasets[0].data.push(newData.x);
-                chart.data.datasets[1].data.shift(); chart.data.datasets[1].data.push(newData.y);
-                chart.data.datasets[2].data.shift(); chart.data.datasets[2].data.push(newData.z);
-            };
-
-            updateDataset(posChart, curPos);
-            updateDataset(velChart, smoothedVel);
-            updateDataset(accChart, smoothedAcc);
-
-            if (currentView === 'telemetry') {
-                posChart.update(); velChart.update(); accChart.update();
-            }
-
-            lastPos = curPos;
-            lastVel = {...smoothedVel};
-        }
-
         // ==============================================================================
-        // THREE.JS SCENE SETUP
+        // THREE.JS SCENE SETUP (Logic now offloaded to Python)
         // ==============================================================================
         const container = document.getElementById('plot-container');
         const scene = new THREE.Scene();
@@ -397,48 +344,17 @@
         const pathLine = new THREE.Line(pathGeometry, new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 3, transparent: true, opacity: 0.85 }));
         scene.add(pathLine);
 
-        function getDHMatrix(a, alpha, d, theta) {
-            let cosT = Math.cos(theta), sinT = Math.sin(theta);
-            let cosA = Math.cos(alpha), sinA = Math.sin(alpha);
-            return new THREE.Matrix4().set(
-                cosT, -sinT*cosA,  sinT*sinA, a*cosT,
-                sinT,  cosT*cosA, -cosT*sinA, a*sinT,
-                0,     sinA,       cosA,      d,
-                0,     0,          0,         1
-            );
-        }
-
+        // Standard Transformation mapping from Python Space to ThreeJS Space
         const R2T = new THREE.Matrix4().set(1,0,0,0, 0,0,1,0, 0,-1,0,0, 0,0,0,1);
 
-        function renderArm(joints) {
+        // Renders geometry purely based on python's mathematical output
+        function renderArm(joints, matrices) {
             function updateCylinder(cylinder, pointA, pointB) {
                 const dir = new THREE.Vector3().subVectors(pointB, pointA);
                 if(dir.length() === 0) return; 
                 cylinder.scale.set(1, dir.length(), 1);
                 cylinder.position.copy(pointA).add(dir.clone().multiplyScalar(0.5));
                 cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
-            }
-
-            let angles = [];
-            for(let i=1; i<=6; i++) {
-                angles.push(parseFloat(document.getElementById(`q${i}`).value) * Math.PI / 180);
-            }
-            
-            let math_thetas = [...angles];
-            math_thetas[1] += Math.PI / 2;
-            math_thetas[2] -= angles[1]; 
-
-            let dh_params = [
-                [30, Math.PI/2, 125, math_thetas[0]], [160, 0, 0, math_thetas[1]], [50, Math.PI/2, 0, math_thetas[2]],
-                [0, -Math.PI/2, 285, math_thetas[3]], [0, Math.PI/2, 0, math_thetas[4]], [0, 0, 75, math_thetas[5]] 
-            ];
-
-            let currentT = new THREE.Matrix4();
-            let matrices = [currentT.clone()];
-            for(let i=0; i<dh_params.length; i++) {
-                let step = getDHMatrix(...dh_params[i]);
-                currentT.multiplyMatrices(currentT, step);
-                matrices.push(currentT.clone());
             }
 
             for (let i = 0; i < joints.length; i++) {
@@ -452,11 +368,22 @@
                     mesh.matrixAutoUpdate = false; 
                 }
                 
-                let m3js = new THREE.Matrix4().multiplyMatrices(R2T, matrices[i]);
-                m3js.setPosition(pt);
-
-                jointNodes[i].matrix.copy(m3js);
-                jointNodes[i].updateMatrixWorld(true);
+                // Apply Python's DH Matrix to ThreeJS Nodes so axes rotate properly
+                if (matrices && matrices[i]) {
+                    let pyMat = matrices[i];
+                    let m = new THREE.Matrix4().set(
+                        pyMat[0][0], pyMat[0][1], pyMat[0][2], pyMat[0][3],
+                        pyMat[1][0], pyMat[1][1], pyMat[1][2], pyMat[1][3],
+                        pyMat[2][0], pyMat[2][1], pyMat[2][2], pyMat[2][3],
+                        pyMat[3][0], pyMat[3][1], pyMat[3][2], pyMat[3][3]
+                    );
+                    let m3js = new THREE.Matrix4().multiplyMatrices(R2T, m);
+                    m3js.setPosition(pt);
+                    jointNodes[i].matrix.copy(m3js);
+                    jointNodes[i].updateMatrixWorld(true);
+                } else {
+                    jointNodes[i].position.copy(pt);
+                }
 
                 if (i < joints.length - 1) {
                     let nextPt = new THREE.Vector3(joints[i+1][0], joints[i+1][2], -joints[i+1][1]);
@@ -471,8 +398,6 @@
             }
 
             let ee = joints[joints.length - 1];
-            pushTelemetryData(ee);
-
             pathPoints.push(new THREE.Vector3(ee[0], ee[2], -ee[1]));
             if (pathPoints.length > 500) pathPoints.shift();
             pathGeometry.setFromPoints(pathPoints);
@@ -494,9 +419,9 @@
             let btn = document.getElementById('globalEstopBtn');
             if (!isEStop) {
                 isEStop = true;
-                sendCommand('ESTOP');
+                fetch(`/send_command?cmd=ESTOP`).catch(e=>{}); // Alert Python Thread
                 appState = 'ESTOPPED';
-                isAutoBatchActive = false; // Kill batch on E-Stop
+                isAutoBatchActive = false; 
                 updateDropZoneUI();
                 updateUIState();
                 
@@ -509,10 +434,10 @@
                 document.getElementById('btText').innerText = "E-STOP ACTIVE";
             } else {
                 isEStop = false;
-                sendCommand('RESET');
+                fetch(`/send_command?cmd=RESET`).catch(e=>{});
                 
                 appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; 
-                sendCommand('RESUME');
+                fetch(`/send_command?cmd=RESUME`).catch(e=>{});
                 
                 updateUIState();
                 
@@ -547,7 +472,7 @@
                 label.style.color = "var(--danger)";
             } else {
                 isSimulation = false; 
-                isAutoBatchActive = false; // Disable batch if leaving simulation
+                isAutoBatchActive = false; 
                 if (checkbox) checkbox.checked = false; 
                 appState = 'DISCONNECTED'; 
                 updateUIState();
@@ -577,7 +502,7 @@
                 executeHybridSequence();
             } else {
                 appState = 'WAITING_FOR_OBJ';
-                sendCommand('RESUME');
+                fetch(`/send_command?cmd=RESUME`).catch(e=>{});
                 updateUIState();
             }
         }
@@ -674,7 +599,7 @@
             }
         }
 
-        // Background Polling Logic
+        // Background Hardware Sensor Polling
         setInterval(async () => {
             if (appState !== 'WAITING_FOR_OBJ' || isSimulation || isEStop) return; 
             try {
@@ -683,14 +608,14 @@
                 if(data.status === "success" && data.message === "OBJ_DETECTED") {
                     appState = 'READY_TO_PICK'; updateUIState();
                     if (isAutoBatchActive) {
-                        setTimeout(executeHybridSequence, 400); // 400ms delay to let hardware settle
+                        setTimeout(executeHybridSequence, 400); // Wait for hardware to physically settle
                     }
                 }
             } catch(e) {}
         }, 800); 
 
         // ==============================================================================
-        // MULTIPLE DROP ZONE LOGIC (WITH LED INDICATOR EDITING)
+        // MULTIPLE DROP ZONE LOGIC
         // ==============================================================================
         let customDropZones = [];
         let currentDropIndex = 0;
@@ -786,18 +711,6 @@
             } catch (e) { btn.innerText = "Failed"; statusText.innerText = "Failed"; indicator.style.background = "#ef4444"; indicator.style.boxShadow = "0 0 8px #ef4444";}
         }
 
-        function pushToHardware(q, sol = 0) {
-            if (isSimulation) return; 
-            fetch(`/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}&sol=${sol}`, {
-                keepalive: true
-            }).catch(e=>{});
-        }
-        
-        function sendCommand(cmd) {
-            if (isSimulation) return; 
-            fetch(`/send_command?cmd=${cmd}`).catch(e=>{});
-        }
-
         function syncFromInput(i) {
             let numInput = document.getElementById(`num${i}`); let slider = document.getElementById(`q${i}`);
             let val = parseFloat(numInput.value); let min = parseFloat(numInput.min); let max = parseFloat(numInput.max);
@@ -813,14 +726,11 @@
                 if(document.activeElement !== document.getElementById(`num${i}`)) document.getElementById(`num${i}`).value = parseFloat(val).toFixed(1);
                 q.push(val);
             }
-            pushToHardware(q, 0); 
-            try {
-                const response = await fetch(`/kinematics?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`);
-                const data = await response.json();
-                if (data.status === "success") renderArm(data.joints);
-            } catch (error) { console.error("Server link failed", error); }
+            // Ask python to calculate coordinates and push to hardware. The background polling loop will pick up the changes and render them.
+            fetch(`/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}&sol=0`).catch(e=>{});
         }
 
+        // The Macro logic now runs natively on Python to prevent browser throttling! JS just initiates it and polls for completion.
         function executeMacro(url) {
             return new Promise(async (resolve, reject) => {
                 try {
@@ -828,38 +738,19 @@
                     const data = await response.json();
 
                     if (data.status === "success") {
-                        let frames = data.frames;
-                        let currentFrame = 0;
-
-                        let macroTimer = setInterval(() => {
-                            if (isEStop) {
-                                clearInterval(macroTimer);
-                                document.getElementById('moveMode').innerText = "HALTED";
-                                resolve(); 
-                                return;
-                            }
-
-                            if (currentFrame >= frames.length) {
-                                clearInterval(macroTimer);
-                                document.getElementById('moveMode').innerText = "IDLE";
-                                if (data.trigger_resume && !isEStop && !isSimulation) sendCommand('RESUME');
-                                resolve(); 
-                                return; 
-                            }
-                            
-                            let frame = frames[currentFrame];
-                            pushToHardware(frame.angles, frame.sol || 0);
-                            
-                            document.getElementById('moveMode').innerText = frame.label || "MOVING";
-                            
-                            for (let i = 1; i <= 6; i++) {
-                                document.getElementById(`q${i}`).value = frame.angles[i-1];
-                                document.getElementById(`num${i}`).value = parseFloat(frame.angles[i-1]).toFixed(1);
-                            }
-                            
-                            renderArm(frame.joints);
-                            currentFrame++;
-                        }, 33);
+                        // Wait briefly to allow the python state machine to switch to "MOVING"
+                        setTimeout(() => {
+                            let checkInterval = setInterval(async () => {
+                                try {
+                                    let res = await fetch('/telemetry');
+                                    let state = await res.json();
+                                    if (state.status === "IDLE" || state.status === "ESTOPPED") {
+                                        clearInterval(checkInterval);
+                                        resolve(); 
+                                    }
+                                } catch(e){}
+                            }, 100);
+                        }, 200); 
                     } else { reject(); }
                 } catch (error) { reject(); }
             });
@@ -885,7 +776,7 @@
             
             try {
                 await executeMacro(`/inverse_kinematics?mode=macro_manual&x=${x}&y=${y}&z=${z}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
-            } catch (e) { if (!isEStop) { alert("Sequence Aborted: Target coordinate exceeds physical reach constraints."); document.getElementById('moveMode').innerText = "ERROR"; } }
+            } catch (e) { if (!isEStop) { alert("Sequence Aborted: Target coordinate exceeds physical reach constraints."); } }
             
             if (!isEStop) { appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState(); }
         }
@@ -929,8 +820,7 @@
             } catch (error) {
                 if (!isEStop) {
                     alert("Sequence Aborted: Target Coordinate or Hover Coordinate exceeds physical reach constraints.");
-                    document.getElementById('moveMode').innerText = "ERROR";
-                    isAutoBatchActive = false; // Abort batch on error
+                    isAutoBatchActive = false; 
                     updateDropZoneUI();
                 }
             }
@@ -946,20 +836,64 @@
             }
         }
 
-        async function init3DViewer() {
+        // ==============================================================================
+        // MASTER SCADA POLLING LOOP (Reads State from Python)
+        // ==============================================================================
+        setInterval(async () => {
             try {
-                let res = await fetch(`/kinematics?q1=0&q2=0&q3=0&q4=0&q5=0&q6=0`);
+                let res = await fetch('/telemetry');
                 let data = await res.json();
-                if (data.status === "success") {
-                    let ee = data.joints[data.joints.length - 1];
-                    lastPos = { x: ee[0], y: ee[1], z: ee[2] };
-                    renderArm(data.joints);
+
+                // 1. Sync 3D Geometry
+                if (data.joints && data.matrices) {
+                    renderArm(data.joints, data.matrices);
                 }
-            } catch (e) {
-                renderArm([[0,0,0], [0,0,125], [0,0,285], [0,0,335], [0,0,620], [0,0,700]]);
-            }
-        }
-        init3DViewer();
+
+                // 2. Sync UI Sliders when Python is autonomously running a macro
+                if (data.status === "MOVING") {
+                    for (let i = 1; i <= 6; i++) {
+                        let angle = parseFloat(data.angles[i-1]).toFixed(1);
+                        document.getElementById(`q${i}`).value = angle;
+                        if(document.activeElement !== document.getElementById(`num${i}`)) {
+                            document.getElementById(`num${i}`).value = angle;
+                        }
+                    }
+                    document.getElementById('moveMode').innerText = "MOVING";
+                    document.getElementById('moveMode').style.color = "var(--accent-purple)";
+                } else if (data.status === "IDLE") {
+                    document.getElementById('moveMode').innerText = "IDLE";
+                    document.getElementById('moveMode').style.color = "var(--text-muted)";
+                } else if (data.status === "ESTOPPED") {
+                    document.getElementById('moveMode').innerText = "HALTED";
+                    document.getElementById('moveMode').style.color = "var(--danger)";
+                }
+
+                // 3. Sync Derivative Telemetry Math generated by Python
+                if (data.joints) {
+                    let ee = data.joints[data.joints.length - 1];
+                    let curPos = { x: ee[0], y: ee[1], z: ee[2] };
+                    let vel = { x: data.velocity[0], y: data.velocity[1], z: data.velocity[2] };
+                    let acc = { x: data.acceleration[0], y: data.acceleration[1], z: data.acceleration[2] };
+
+                    posChart.data.datasets[0].data.shift(); posChart.data.datasets[0].data.push(curPos.x);
+                    posChart.data.datasets[1].data.shift(); posChart.data.datasets[1].data.push(curPos.y);
+                    posChart.data.datasets[2].data.shift(); posChart.data.datasets[2].data.push(curPos.z);
+
+                    velChart.data.datasets[0].data.shift(); velChart.data.datasets[0].data.push(vel.x);
+                    velChart.data.datasets[1].data.shift(); velChart.data.datasets[1].data.push(vel.y);
+                    velChart.data.datasets[2].data.shift(); velChart.data.datasets[2].data.push(vel.z);
+
+                    accChart.data.datasets[0].data.shift(); accChart.data.datasets[0].data.push(acc.x);
+                    accChart.data.datasets[1].data.shift(); accChart.data.datasets[1].data.push(acc.y);
+                    accChart.data.datasets[2].data.shift(); accChart.data.datasets[2].data.push(acc.z);
+
+                    if (currentView === 'telemetry') {
+                        posChart.update('none'); velChart.update('none'); accChart.update('none');
+                    }
+                }
+            } catch(e) {}
+        }, 33);
+        
         updateUIState();
     </script>
 </body> 
