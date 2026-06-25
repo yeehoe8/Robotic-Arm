@@ -55,7 +55,6 @@
         .btn-home { background: linear-gradient(135deg, var(--accent-orange), #d97706); }
         .btn-hybrid { background: linear-gradient(135deg, var(--accent-purple), #7e22ce); }
         
-        /* Dedicated E-Stop Styling */
         .btn-estop { background: linear-gradient(135deg, var(--danger), #b91c1c); color: white; margin-top: 15px; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); text-transform: uppercase; letter-spacing: 1px; }
         .btn-estop:hover:not(:disabled) { background: #b91c1c; box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6); }
 
@@ -81,7 +80,6 @@
         .bt-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 8px var(--danger); transition: 0.3s; }
         canvas { display: block; outline: none; }
 
-        /* Toggle Switch Styling */
         .toggle-container { display: flex; align-items: center; gap: 12px; margin-top: 15px; }
         .switch { position: relative; display: inline-block; width: 46px; height: 24px; flex-shrink: 0; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -106,7 +104,6 @@
     <div id="sidebar">
         <h2>Control Panel</h2>
         
-        <!-- GLOBAL E-STOP & LINK AREA -->
         <div class="slider-group panel-hardware">
             <h3 style="color: var(--accent-green);">System Link</h3>
             <div class="flex-row">
@@ -122,7 +119,6 @@
                 <span id="simToggleLabel" style="color: var(--accent-purple); font-weight: 600; font-size: 0.9rem;">Simulation Mode: OFF</span>
             </div>
             
-            <!-- Global Emergency Stop Button -->
             <button onclick="toggleEStop()" id="globalEstopBtn" class="btn-estop" disabled>EMERGENCY STOP</button>
         </div>
 
@@ -188,16 +184,24 @@
                     <label>Z <input type="number" id="placeZ" value="-50" disabled></label>
                 </div>
 
-                <button id="workflowBtn" class="btn-hybrid" onclick="executeHybridSequence()" disabled style="margin-top: 15px;">Execute Auto Workflow</button>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button id="addZoneBtn" onclick="addDropZone()" style="background: rgba(14, 165, 233, 0.1); color: var(--accent-cyan); border: 1px dashed var(--accent-cyan); padding: 8px;" disabled>➕ Add Drop Zone</button>
+                    <button id="clearZonesBtn" onclick="clearDropZones()" style="background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px dashed var(--danger); padding: 8px; width: 30%;" disabled>🗑️ Clear</button>
+                </div>
+
+                <div id="dropZoneListUI" style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted); background: rgba(15, 23, 42, 0.4); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); max-height: 140px; overflow-y: auto;">
+                    <em>No custom zones added. Will use default coordinate above.</em>
+                </div>
+
+                <button id="workflowBtn" class="btn-hybrid" onclick="toggleAutoBatch()" disabled style="margin-top: 15px;">Start Auto Batch</button>
             </div>
         </div>
     </div>
 
-    <!-- MAIN VIEW AREA -->
     <div id="main-content">
         <div id="view-toggles">
             <button class="view-btn active" id="btnView3D" onclick="switchMainView('3d')">3D Digital Twin</button>
-            <button class="view-btn" id="btnViewTel" onclick="switchMainView('telemetry')">Live Telemetry</button>
+            <button class="view-btn" id="btnViewTel" onclick="switchMainView('telemetry')">Theoretical Profile Analysis</button>
         </div>
 
         <div class="data-readout" id="tcpReadout">
@@ -205,15 +209,7 @@
             <div class="coord-line">X: <span id="outX">0.00</span> mm</div>
             <div class="coord-line">Y: <span id="outY">0.00</span> mm</div>
             <div class="coord-line">Z: <span id="outZ">0.00</span> mm</div>
-            <div style="font-size: 0.8rem; margin-top: 10px; color: #cbd5e1; border-top: 1px solid var(--border-color); padding-top: 5px;">Engine: <span id="moveMode" style="color: var(--accent-purple); width:auto;">IDLE</span></div>
-            
-            <!-- NEW: D-H Frame Axis Legend -->
-            <div style="font-size: 0.75rem; margin-top: 8px; color: #94a3b8; display:flex; justify-content: space-between; align-items: center;">
-                <span><b style="color:#ef4444;">X</b></span>
-                <span><b style="color:#10b981;">Y</b></span>
-                <span><b style="color:#3b82f6;">Z</b></span>
-                <span style="border: 1px solid #334155; padding: 2px 6px; border-radius: 4px;">D-H Frames</span>
-            </div>
+            <div style="font-size: 0.8rem; margin-top: 10px; color: #cbd5e1; border-top: 1px solid var(--border-color); padding-top: 5px;">Engine: <span id="moveMode" style="color: var(--text-muted); width:auto;">IDLE</span></div>
         </div>
 
         <div class="bt-floating-status">
@@ -224,17 +220,44 @@
         <div id="plot-container"></div>
 
         <div id="telemetry-container">
+            <!-- Cartesian Telemetry Section -->
+            <h2 style="color: var(--accent-cyan); padding-bottom: 5px; border-bottom: 1px solid var(--border-color); margin-top: 0;">Cartesian Space (End-Effector)</h2>
             <div class="chart-card">
-                <h3>End-Effector Position (mm)</h3>
+                <h3>Position Profile (mm)</h3>
                 <canvas id="posChart"></canvas>
             </div>
             <div class="chart-card">
-                <h3>End-Effector Velocity (mm/s)</h3>
+                <h3>Velocity Profile (mm/s)</h3>
                 <canvas id="velChart"></canvas>
             </div>
             <div class="chart-card">
-                <h3>End-Effector Acceleration (mm/s²)</h3>
+                <h3>Acceleration Profile (mm/s²)</h3>
                 <canvas id="accChart"></canvas>
+            </div>
+            
+            <!-- Angular Joint Space Section -->
+            <h2 style="color: var(--accent-purple); padding-bottom: 5px; border-bottom: 1px solid var(--border-color); margin-top: 25px; display: flex; justify-content: space-between; align-items: center;">
+                Joint Space Analysis
+                <select id="jointSelect" style="background: var(--bg-card); color: #fff; border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; font-family: 'Inter', sans-serif; outline: none; cursor: pointer;">
+                    <option value="0">Joint 1 (Base)</option>
+                    <option value="1">Joint 2 (Shoulder)</option>
+                    <option value="2">Joint 3 (Elbow)</option>
+                    <option value="3">Joint 4 (Wrist Roll)</option>
+                    <option value="4">Joint 5 (Wrist Pitch)</option>
+                    <option value="5">Joint 6 (Wrist Yaw)</option>
+                </select>
+            </h2>
+            <div class="chart-card">
+                <h3>Joint Angle Profile (&deg;)</h3>
+                <canvas id="jointPosChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Joint Velocity Profile (&deg;/s)</h3>
+                <canvas id="jointVelChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Joint Acceleration Profile (&deg;/s²)</h3>
+                <canvas id="jointAccChart"></canvas>
             </div>
         </div>
     </div>
@@ -275,13 +298,19 @@
                 document.getElementById('telemetry-container').style.display = 'flex';
                 document.getElementById('tcpReadout').style.display = 'none';
                 currentView = 'telemetry';
+                
+                // Force a render of the static frozen graphs when the user switches tabs
+                setTimeout(() => {
+                    posChart.update(); velChart.update(); accChart.update();
+                    jointPosChart.update(); jointVelChart.update(); jointAccChart.update();
+                }, 50);
             }
         }
 
         // ==============================================================================
         // HIGH-SPEED TELEMETRY GRAPHING (CHART.JS)
         // ==============================================================================
-        const MAX_DATA_POINTS = 100;
+        const MAX_DATA_POINTS = 600; 
         const emptyLabels = Array(MAX_DATA_POINTS).fill('');
         
         const chartOptions = {
@@ -294,7 +323,7 @@
             plugins: { legend: { labels: { color: '#fff', font: {family: 'Inter', size: 11} } } }
         };
 
-        const createChart = (ctxId, title, yLabel) => {
+        const createChart = (ctxId) => {
             return new Chart(document.getElementById(ctxId).getContext('2d'), {
                 type: 'line',
                 data: { labels: emptyLabels, datasets: [
@@ -306,63 +335,37 @@
             });
         };
 
+        const createSingleChart = (ctxId, label, color) => {
+            return new Chart(document.getElementById(ctxId).getContext('2d'), {
+                type: 'line',
+                data: { labels: emptyLabels, datasets: [
+                    { label: label, borderColor: color, data: Array(MAX_DATA_POINTS).fill(0) }
+                ]},
+                options: chartOptions
+            });
+        };
+
         const posChart = createChart('posChart');
         const velChart = createChart('velChart');
         const accChart = createChart('accChart');
+        
+        const jointPosChart = createSingleChart('jointPosChart', 'Angle', '#a855f7');
+        const jointVelChart = createSingleChart('jointVelChart', 'Velocity', '#f59e0b');
+        const jointAccChart = createSingleChart('jointAccChart', 'Acceleration', '#10b981');
 
-        let lastChartTime = performance.now();
-        let lastPos = {x: 0, y: 0, z: 0};
-        let lastVel = {x: 0, y: 0, z: 0};
-        let smoothedVel = {x: 0, y: 0, z: 0};
-        let smoothedAcc = {x: 0, y: 0, z: 0};
-
-        function pushTelemetryData(ee) {
-            let now = performance.now();
-            let dt = (now - lastChartTime) / 1000.0;
-            if (dt < 0.015) return; 
-            if (dt > 0.1) dt = 0.033; 
-            lastChartTime = now;
-
-            let curPos = { x: ee[0], y: ee[1], z: ee[2] };
-
-            let rawVx = (curPos.x - lastPos.x) / dt;
-            let rawVy = (curPos.y - lastPos.y) / dt;
-            let rawVz = (curPos.z - lastPos.z) / dt;
-
-            const alphaV = 0.25; 
-            smoothedVel.x = (alphaV * rawVx) + ((1 - alphaV) * smoothedVel.x);
-            smoothedVel.y = (alphaV * rawVy) + ((1 - alphaV) * smoothedVel.y);
-            smoothedVel.z = (alphaV * rawVz) + ((1 - alphaV) * smoothedVel.z);
-
-            let rawAx = (smoothedVel.x - lastVel.x) / dt;
-            let rawAy = (smoothedVel.y - lastVel.y) / dt;
-            let rawAz = (smoothedVel.z - lastVel.z) / dt;
-
-            const alphaA = 0.15;
-            smoothedAcc.x = (alphaA * rawAx) + ((1 - alphaA) * smoothedAcc.x);
-            smoothedAcc.y = (alphaA * rawAy) + ((1 - alphaA) * smoothedAcc.y);
-            smoothedAcc.z = (alphaA * rawAz) + ((1 - alphaA) * smoothedAcc.z);
-
-            const updateDataset = (chart, newData) => {
-                chart.data.datasets[0].data.shift(); chart.data.datasets[0].data.push(newData.x);
-                chart.data.datasets[1].data.shift(); chart.data.datasets[1].data.push(newData.y);
-                chart.data.datasets[2].data.shift(); chart.data.datasets[2].data.push(newData.z);
-            };
-
-            updateDataset(posChart, curPos);
-            updateDataset(velChart, smoothedVel);
-            updateDataset(accChart, smoothedAcc);
-
-            if (currentView === 'telemetry') {
-                posChart.update(); velChart.update(); accChart.update();
-            }
-
-            lastPos = curPos;
-            lastVel = {...smoothedVel};
-        }
+        document.getElementById('jointSelect').addEventListener('change', () => {
+            let zeroArr = Array(MAX_DATA_POINTS).fill(0);
+            jointPosChart.data.datasets[0].data = [...zeroArr];
+            jointVelChart.data.datasets[0].data = [...zeroArr];
+            jointAccChart.data.datasets[0].data = [...zeroArr];
+            
+            jointPosChart.update();
+            jointVelChart.update();
+            jointAccChart.update();
+        });
 
         // ==============================================================================
-        // THREE.JS SCENE SETUP & D-H KINEMATICS
+        // THREE.JS SCENE SETUP 
         // ==============================================================================
         const container = document.getElementById('plot-container');
         const scene = new THREE.Scene();
@@ -399,27 +402,9 @@
         const pathLine = new THREE.Line(pathGeometry, new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 3, transparent: true, opacity: 0.85 }));
         scene.add(pathLine);
 
-        // --- NEW: JS Denavit-Hartenberg Math Engine ---
-        // Converts mathematical robotics coordinates [X,Y,Z] into Three.js web coordinates [X,Z,-Y]
-        const R2T = new THREE.Matrix4().set(
-            1, 0, 0, 0,
-            0, 0, 1, 0,
-            0, -1, 0, 0,
-            0, 0, 0, 1
-        );
+        const R2T = new THREE.Matrix4().set(1,0,0,0, 0,0,1,0, 0,-1,0,0, 0,0,0,1);
 
-        function getDHMatrix(a, alpha, d, theta) {
-            let cosT = Math.cos(theta), sinT = Math.sin(theta);
-            let cosA = Math.cos(alpha), sinA = Math.sin(alpha);
-            return new THREE.Matrix4().set(
-                cosT, -sinT*cosA,  sinT*sinA, a*cosT,
-                sinT,  cosT*cosA, -cosT*sinA, a*sinT,
-                0,     sinA,       cosA,      d,
-                0,     0,          0,         1
-            );
-        }
-
-        function renderArm(joints) {
+        function renderArm(joints, matrices) {
             function updateCylinder(cylinder, pointA, pointB) {
                 const dir = new THREE.Vector3().subVectors(pointB, pointA);
                 if(dir.length() === 0) return; 
@@ -428,60 +413,32 @@
                 cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
             }
 
-            // 1. DYNAMICALLY REBUILD D-H MATRICES IN JAVASCRIPT
-            let angles = [];
-            for(let i=1; i<=6; i++) {
-                angles.push(parseFloat(document.getElementById(`q${i}`).value) * Math.PI / 180);
-            }
-            
-            let math_thetas = [...angles];
-            math_thetas[1] += Math.PI / 2;
-            
-            // CRITICAL FIX 1: Subtract original angles[1] to perfectly match Python's 'thetas[1]'
-            math_thetas[2] -= angles[1]; 
-
-            // Same physical constraints as your Python backend!
-            let dh_params = [
-                [30, Math.PI/2, 125, math_thetas[0]],
-                [160, 0, 0, math_thetas[1]],
-                [50, Math.PI/2, 0, math_thetas[2]],
-                [0, -Math.PI/2, 285, math_thetas[3]],
-                [0, Math.PI/2, 0, math_thetas[4]],
-                [0, 0, 75, math_thetas[5]]
-            ];
-
-            let currentT = new THREE.Matrix4();
-            let matrices = [currentT.clone()]; // Start with Identity matrix at base
-            for(let i=0; i<dh_params.length; i++) {
-                let step = getDHMatrix(...dh_params[i]);
-                currentT.multiplyMatrices(currentT, step);
-                matrices.push(currentT.clone());
-            }
-
-            // 2. RENDER ARM AND APPLY D-H LOCAL ORIENTATIONS
             for (let i = 0; i < joints.length; i++) {
                 let pt = new THREE.Vector3(joints[i][0], joints[i][2], -joints[i][1]); 
                 if (!jointNodes[i]) {
                     let mesh = new THREE.Mesh(new THREE.SphereGeometry(12, 16, 16), matNode);
-                    
-                    // Add standard Cartesian Frame Axes (Red=X, Green=Y, Blue=Z)
                     let axesHelper = new THREE.AxesHelper(75); 
                     mesh.add(axesHelper);
-
                     scene.add(mesh); 
                     jointNodes[i] = mesh;
                     mesh.matrixAutoUpdate = false; 
                 }
                 
-                // Map the theoretical D-H matrix directly onto the physical 3D object
-                let m3js = new THREE.Matrix4().multiplyMatrices(R2T, matrices[i]);
-                
-                // CRITICAL FIX 2: Hard-lock the D-H frame to the exact Python origin!
-                // This guarantees the axes can never physically detach from the cylinders.
-                m3js.setPosition(pt);
-
-                jointNodes[i].matrix.copy(m3js);
-                jointNodes[i].updateMatrixWorld(true);
+                if (matrices && matrices[i]) {
+                    let pyMat = matrices[i];
+                    let m = new THREE.Matrix4().set(
+                        pyMat[0][0], pyMat[0][1], pyMat[0][2], pyMat[0][3],
+                        pyMat[1][0], pyMat[1][1], pyMat[1][2], pyMat[1][3],
+                        pyMat[2][0], pyMat[2][1], pyMat[2][2], pyMat[2][3],
+                        pyMat[3][0], pyMat[3][1], pyMat[3][2], pyMat[3][3]
+                    );
+                    let m3js = new THREE.Matrix4().multiplyMatrices(R2T, m);
+                    m3js.setPosition(pt);
+                    jointNodes[i].matrix.copy(m3js);
+                    jointNodes[i].updateMatrixWorld(true);
+                } else {
+                    jointNodes[i].position.copy(pt);
+                }
 
                 if (i < joints.length - 1) {
                     let nextPt = new THREE.Vector3(joints[i+1][0], joints[i+1][2], -joints[i+1][1]);
@@ -496,8 +453,6 @@
             }
 
             let ee = joints[joints.length - 1];
-            pushTelemetryData(ee);
-
             pathPoints.push(new THREE.Vector3(ee[0], ee[2], -ee[1]));
             if (pathPoints.length > 500) pathPoints.shift();
             pathGeometry.setFromPoints(pathPoints);
@@ -512,15 +467,18 @@
         // ==============================================================================
         let appState = 'DISCONNECTED'; 
         let isSimulation = false;
-        let isEStop = false; // System-wide E-Stop flag
+        let isEStop = false;
+        let isAutoBatchActive = false;
+        let wasMoving = false; // Trajectory Tracking Variable
 
         function toggleEStop() {
             let btn = document.getElementById('globalEstopBtn');
             if (!isEStop) {
-                // ACTIVATE E-STOP
                 isEStop = true;
-                sendCommand('ESTOP');
+                fetch(`/send_command?cmd=ESTOP`).catch(e=>{}); 
                 appState = 'ESTOPPED';
+                isAutoBatchActive = false; 
+                updateDropZoneUI();
                 updateUIState();
                 
                 btn.innerText = "RESET SYSTEM";
@@ -531,38 +489,38 @@
                 document.getElementById('btIndicator').style.boxShadow = "0 0 8px var(--danger)";
                 document.getElementById('btText').innerText = "E-STOP ACTIVE";
             } else {
-                // DEACTIVATE E-STOP
                 isEStop = false;
-                sendCommand('RESET');
+                fetch(`/send_command?cmd=RESET`).catch(e=>{});
                 
                 appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; 
-                // Automatically restart the conveyor belt when the system is deemed safe again
-                sendCommand('RESUME');
+                fetch(`/send_command?cmd=RESUME`).catch(e=>{});
                 
                 updateUIState();
                 
                 btn.innerText = "EMERGENCY STOP";
-                btn.style.background = ""; // Revert to CSS default
+                btn.style.background = ""; 
                 btn.style.boxShadow = ""; 
                 
                 document.getElementById('btIndicator').style.background = isSimulation ? "#a855f7" : "#10b981";
                 document.getElementById('btIndicator').style.boxShadow = isSimulation ? "0 0 8px #a855f7" : "0 0 8px #10b981";
-                document.getElementById('btText').innerText = isSimulation ? "Hardware-in-Loop Link" : "Connected";
+                document.getElementById('btText').innerText = isSimulation ? "Simulation Mode" : "Connected";
             }
         }
 
-        function toggleSimMode() {
+        async function toggleSimMode() {
             let checkbox = document.getElementById('simToggleSwitch');
             let label = document.getElementById('simToggleLabel');
             
             if (!isSimulation) {
                 isSimulation = true; 
-                if (checkbox) checkbox.checked = true; // Sync UI if triggered programmatically
+                if (checkbox) checkbox.checked = true; 
                 appState = 'READY_TO_PICK'; 
                 updateUIState();
                 
-                document.getElementById('sysStatus').innerText = 'H.I.L. SIMULATION ACTIVE';
-                document.getElementById('btText').innerText = "Hardware-in-Loop Link";
+                await fetch('/set_simulation?state=true').catch(e=>{});
+                
+                document.getElementById('sysStatus').innerText = 'SIMULATION MODE';
+                document.getElementById('btText').innerText = "Simulation Mode";
                 document.getElementById('btIndicator').style.background = "#a855f7";
                 document.getElementById('btIndicator').style.boxShadow = "0 0 8px #a855f7";
                 
@@ -570,9 +528,12 @@
                 label.style.color = "var(--danger)";
             } else {
                 isSimulation = false; 
-                if (checkbox) checkbox.checked = false; // Sync UI
+                isAutoBatchActive = false; 
+                if (checkbox) checkbox.checked = false; 
                 appState = 'DISCONNECTED'; 
                 updateUIState();
+                
+                await fetch('/set_simulation?state=false').catch(e=>{});
                 
                 document.getElementById('btText').innerText = "Disconnected";
                 document.getElementById('btIndicator').style.background = "var(--danger)";
@@ -584,20 +545,77 @@
             }
         }
 
+        function toggleAutoBatch() {
+            if (customDropZones.length === 0) {
+                alert("Please add at least one drop zone to start the Auto Batch.");
+                return;
+            }
+            isAutoBatchActive = true;
+            currentDropIndex = 0;
+            updateDropZoneUI();
+            
+            if (appState === 'READY_TO_PICK') {
+                executeHybridSequence();
+            } else {
+                appState = 'WAITING_FOR_OBJ';
+                fetch(`/send_command?cmd=RESUME`).catch(e=>{});
+                updateUIState();
+            }
+        }
+
+        function stopAutoBatch() {
+            isAutoBatchActive = false;
+            currentDropIndex = 0;
+            updateDropZoneUI();
+            updateUIState();
+        }
+
         function updateUIState() {
             const statusBadge = document.getElementById('sysStatus');
             const elementsToToggle = [
                 'pickX', 'pickY', 'pickZ', 'placeX', 'placeY', 'placeZ', 'manX', 'manY', 'manZ',
-                'workflowBtn', 'homeBtn', 'manualMoveBtn'
+                'homeBtn', 'manualMoveBtn'
             ];
             for(let i=1; i<=6; i++) { elementsToToggle.push(`q${i}`); elementsToToggle.push(`num${i}`); }
 
-            const setDisabled = (state) => elementsToToggle.forEach(id => document.getElementById(id).disabled = state);
+            const setDisabled = (state) => {
+                elementsToToggle.forEach(id => {
+                    let el = document.getElementById(id);
+                    if(el) el.disabled = state;
+                });
+                
+                let zoneLock = state || isAutoBatchActive;
+                document.getElementById('addZoneBtn').disabled = zoneLock;
+                document.getElementById('clearZonesBtn').disabled = zoneLock;
+                document.querySelectorAll('.zone-edit-input').forEach(el => el.disabled = zoneLock);
+            };
+
+            const wBtn = document.getElementById('workflowBtn');
+            const updateWorkflowBtn = (forceDisable = false) => {
+                if (!wBtn) return;
+                if (forceDisable) {
+                    wBtn.disabled = true;
+                    return;
+                }
+                
+                if (isAutoBatchActive) {
+                    wBtn.innerText = "🛑 Stop Auto Batch";
+                    wBtn.style.background = "var(--danger)";
+                    wBtn.onclick = stopAutoBatch;
+                    wBtn.disabled = false; 
+                } else {
+                    wBtn.innerText = "Start Auto Batch";
+                    wBtn.style.background = ""; 
+                    wBtn.onclick = toggleAutoBatch;
+                    wBtn.disabled = false;
+                }
+            };
 
             if (appState === 'DISCONNECTED') {
                 statusBadge.className = 'status-badge status-idle'; statusBadge.innerText = 'System Offline';
                 statusBadge.style = "";
                 setDisabled(true);
+                updateWorkflowBtn(true);
                 document.getElementById('globalEstopBtn').disabled = true;
             } 
             else if (appState === 'ESTOPPED') {
@@ -607,25 +625,32 @@
                 statusBadge.style.border = '1px solid #ef4444';
                 statusBadge.innerText = 'SYSTEM HALTED (E-STOP)';
                 setDisabled(true);
-                document.getElementById('globalEstopBtn').disabled = false; // Always allow the Reset
+                updateWorkflowBtn(true);
+                document.getElementById('globalEstopBtn').disabled = false;
             }
             else {
-                // Remove hardcoded E-Stop styling if active
                 statusBadge.style = "";
                 document.getElementById('globalEstopBtn').disabled = false;
 
                 if (appState === 'WAITING_FOR_OBJ') {
-                    statusBadge.className = 'status-badge status-running'; statusBadge.innerText = 'Conveyor Running. Waiting...';
+                    statusBadge.className = 'status-badge status-running'; 
+                    statusBadge.innerText = isAutoBatchActive ? 'AUTO BATCH: Waiting for Object...' : 'Conveyor Running. Waiting...';
                     setDisabled(false);
-                    document.getElementById('pickX').disabled = true; document.getElementById('pickY').disabled = true; document.getElementById('pickZ').disabled = true;
-                    document.getElementById('placeX').disabled = true; document.getElementById('placeY').disabled = true; document.getElementById('placeZ').disabled = true;
-                    document.getElementById('workflowBtn').disabled = true;
+                    updateWorkflowBtn(false);
                 } else if (appState === 'READY_TO_PICK') {
-                    statusBadge.className = 'status-badge status-detect'; statusBadge.innerText = isSimulation ? 'H.I.L. SIMULATION ACTIVE' : 'Object Detected! Ready.';
+                    statusBadge.className = 'status-badge status-detect'; 
+                    statusBadge.innerText = isSimulation ? 'SIMULATION MODE' : 'Object Detected! Ready.';
                     setDisabled(false);
+                    updateWorkflowBtn(false);
                 } else if (appState === 'WORKING') {
-                    statusBadge.className = 'status-badge status-working'; statusBadge.innerText = 'Executing Macro Trajectory...';
+                    statusBadge.className = 'status-badge status-working'; 
+                    statusBadge.innerText = isAutoBatchActive ? `AUTO BATCH: Moving to Zone ${currentDropIndex + 1}` : 'Executing Macro Trajectory...';
                     setDisabled(true);
+                    if (isAutoBatchActive) {
+                        updateWorkflowBtn(false); 
+                    } else {
+                        updateWorkflowBtn(true);
+                    }
                 }
             }
         }
@@ -637,9 +662,75 @@
                 let data = await res.json();
                 if(data.status === "success" && data.message === "OBJ_DETECTED") {
                     appState = 'READY_TO_PICK'; updateUIState();
+                    if (isAutoBatchActive) {
+                        setTimeout(executeHybridSequence, 400);
+                    }
                 }
             } catch(e) {}
         }, 800); 
+
+        // ==============================================================================
+        // MULTIPLE DROP ZONE LOGIC
+        // ==============================================================================
+        let customDropZones = [];
+        let currentDropIndex = 0;
+
+        function addDropZone() {
+            let x = parseFloat(document.getElementById('placeX').value);
+            let y = parseFloat(document.getElementById('placeY').value);
+            let z = parseFloat(document.getElementById('placeZ').value);
+            
+            customDropZones.push({x, y, z});
+            updateDropZoneUI();
+        }
+
+        function clearDropZones() {
+            customDropZones = [];
+            currentDropIndex = 0;
+            updateDropZoneUI();
+        }
+        
+        function editZone(index, axis, val) {
+            let parsedVal = parseFloat(val);
+            if (!isNaN(parsedVal)) {
+                customDropZones[index][axis] = parsedVal;
+            }
+        }
+
+        function updateDropZoneUI() {
+            let container = document.getElementById('dropZoneListUI');
+            if (customDropZones.length === 0) {
+                container.innerHTML = "<em>No custom zones added. Will use default coordinate above.</em>";
+                return;
+            }
+            
+            let html = "<div style='display: flex; flex-direction: column; gap: 8px;'>";
+            customDropZones.forEach((zone, index) => {
+                let isNext = (index === currentDropIndex) ? 
+                    "<div title='Next Target' style='width: 12px; height: 12px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); margin-left: 8px; flex-shrink: 0;'></div>" : 
+                    "<div style='width: 12px; height: 12px; border-radius: 50%; background: var(--border-color); margin-left: 8px; flex-shrink: 0;'></div>";
+                    
+                html += `
+                <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.2); padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <span style="font-weight: bold; color: var(--accent-cyan); font-size: 0.8rem; min-width: 45px;">Zone ${index + 1}:</span>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <span style="font-size: 0.75rem;">X</span>
+                        <input type="number" class="zone-edit-input" value="${zone.x}" onchange="editZone(${index}, 'x', this.value)" style="width: 45px !important; padding: 4px !important; font-size: 0.75rem; background: rgba(15, 23, 42, 0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
+                        <span style="font-size: 0.75rem;">Y</span>
+                        <input type="number" class="zone-edit-input" value="${zone.y}" onchange="editZone(${index}, 'y', this.value)" style="width: 45px !important; padding: 4px !important; font-size: 0.75rem; background: rgba(15, 23, 42, 0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
+                        <span style="font-size: 0.75rem;">Z</span>
+                        <input type="number" class="zone-edit-input" value="${zone.z}" onchange="editZone(${index}, 'z', this.value)" style="width: 45px !important; padding: 4px !important; font-size: 0.75rem; background: rgba(15, 23, 42, 0.5); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
+                    </div>
+                    ${isNext}
+                </div>`;
+            });
+            html += "</div>";
+            container.innerHTML = html;
+            
+            if (appState === 'WORKING' || appState === 'ESTOPPED' || isAutoBatchActive) {
+                document.querySelectorAll('.zone-edit-input').forEach(el => el.disabled = true);
+            }
+        }
 
         // ==============================================================================
         // HARDWARE COMMS & THE MACRO PLAYER
@@ -653,11 +744,14 @@
             let label = document.getElementById('simToggleLabel');
             
             isSimulation = false; 
+            isAutoBatchActive = false;
             if (checkbox) checkbox.checked = false;
             if (label) {
                 label.innerText = "Simulation Mode: OFF";
                 label.style.color = "var(--accent-purple)";
             }
+            
+            await fetch('/set_simulation?state=false').catch(e=>{});
             
             btn.innerText = "Connecting..."; statusText.innerText = "Connecting..."; indicator.style.background = "#f59e0b";
             try {
@@ -670,16 +764,6 @@
                     btn.innerText = "Error"; statusText.innerText = `Error`; indicator.style.background = "#ef4444"; indicator.style.boxShadow = "0 0 8px #ef4444";
                 }
             } catch (e) { btn.innerText = "Failed"; statusText.innerText = "Failed"; indicator.style.background = "#ef4444"; indicator.style.boxShadow = "0 0 8px #ef4444";}
-        }
-
-        function pushToHardware(q, sol = 0) {
-            fetch(`/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}&sol=${sol}`, {
-                keepalive: true
-            }).catch(e=>{});
-        }
-        
-        function sendCommand(cmd) {
-            fetch(`/send_command?cmd=${cmd}`).catch(e=>{});
         }
 
         function syncFromInput(i) {
@@ -697,17 +781,9 @@
                 if(document.activeElement !== document.getElementById(`num${i}`)) document.getElementById(`num${i}`).value = parseFloat(val).toFixed(1);
                 q.push(val);
             }
-            pushToHardware(q, 0); 
-            try {
-                const response = await fetch(`/kinematics?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}`);
-                const data = await response.json();
-                if (data.status === "success") renderArm(data.joints);
-            } catch (error) { console.error("Server link failed", error); }
+            fetch(`/set_hardware?q1=${q[0]}&q2=${q[1]}&q3=${q[2]}&q4=${q[3]}&q5=${q[4]}&q6=${q[5]}&sol=0`).catch(e=>{});
         }
 
-        // ==============================================================================
-        // THE MASTER MACRO EXECUTOR
-        // ==============================================================================
         function executeMacro(url) {
             return new Promise(async (resolve, reject) => {
                 try {
@@ -715,48 +791,23 @@
                     const data = await response.json();
 
                     if (data.status === "success") {
-                        let frames = data.frames;
-                        let currentFrame = 0;
-
-                        let macroTimer = setInterval(() => {
-                            // ABORT MACRO IMMEDIATELY IF ESTOP IS ACTIVE
-                            if (isEStop) {
-                                clearInterval(macroTimer);
-                                document.getElementById('moveMode').innerText = "HALTED";
-                                resolve(); 
-                                return;
-                            }
-
-                            if (currentFrame >= frames.length) {
-                                clearInterval(macroTimer);
-                                document.getElementById('moveMode').innerText = "IDLE";
-                                // Re-engage conveyor at the end of the Auto workflow!
-                                if (data.trigger_resume && !isEStop) sendCommand('RESUME');
-                                resolve(); 
-                                return; 
-                            }
-                            
-                            let frame = frames[currentFrame];
-                            pushToHardware(frame.angles, frame.sol || 0);
-                            
-                            document.getElementById('moveMode').innerText = frame.label || "MOVING";
-                            
-                            for (let i = 1; i <= 6; i++) {
-                                document.getElementById(`q${i}`).value = frame.angles[i-1];
-                                document.getElementById(`num${i}`).value = parseFloat(frame.angles[i-1]).toFixed(1);
-                            }
-                            
-                            renderArm(frame.joints);
-                            currentFrame++;
-                        }, 33);
+                        setTimeout(() => {
+                            let checkInterval = setInterval(async () => {
+                                try {
+                                    let res = await fetch('/telemetry');
+                                    let state = await res.json();
+                                    if (state.status === "IDLE" || state.status === "ESTOPPED") {
+                                        clearInterval(checkInterval);
+                                        resolve(); 
+                                    }
+                                } catch(e){}
+                            }, 100);
+                        }, 200); 
                     } else { reject(); }
                 } catch (error) { reject(); }
             });
         }
 
-        // ==============================================================================
-        // MACRO ROUTER ENDPOINTS
-        // ==============================================================================
         async function triggerHomeSequence() {
             appState = 'WORKING'; updateUIState();
             let cur = []; for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
@@ -777,7 +828,7 @@
             
             try {
                 await executeMacro(`/inverse_kinematics?mode=macro_manual&x=${x}&y=${y}&z=${z}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
-            } catch (e) { if (!isEStop) { alert("Sequence Aborted: Target coordinate exceeds physical reach constraints."); document.getElementById('moveMode').innerText = "ERROR"; } }
+            } catch (e) { if (!isEStop) { alert("Sequence Aborted: Target coordinate exceeds physical reach constraints."); } }
             
             if (!isEStop) { appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState(); }
         }
@@ -789,37 +840,130 @@
             let px = parseFloat(document.getElementById('pickX').value);
             let py = parseFloat(document.getElementById('pickY').value);
             let pz = parseFloat(document.getElementById('pickZ').value);
-            let dx = parseFloat(document.getElementById('placeX').value);
-            let dy = parseFloat(document.getElementById('placeY').value);
-            let dz = parseFloat(document.getElementById('placeZ').value);
+            
+            let dx, dy, dz;
+
+            if (customDropZones.length > 0) {
+                let targetZone = customDropZones[currentDropIndex];
+                dx = targetZone.x;
+                dy = targetZone.y;
+                dz = targetZone.z;
+            } else {
+                dx = parseFloat(document.getElementById('placeX').value);
+                dy = parseFloat(document.getElementById('placeY').value);
+                dz = parseFloat(document.getElementById('placeZ').value);
+            }
+
             let cur = []; for (let i = 1; i <= 6; i++) cur.push(document.getElementById(`q${i}`).value);
 
             try {
                 await executeMacro(`/inverse_kinematics?mode=macro_auto&px=${px}&py=${py}&pz=${pz}&dx=${dx}&dy=${dy}&dz=${dz}&cur1=${cur[0]}&cur2=${cur[1]}&cur3=${cur[2]}&cur4=${cur[3]}&cur5=${cur[4]}&cur6=${cur[5]}`);
+                
+                if (customDropZones.length > 0 && !isEStop) {
+                    currentDropIndex++;
+                    if (currentDropIndex >= customDropZones.length) {
+                        isAutoBatchActive = false;
+                        currentDropIndex = 0;
+                    }
+                    updateDropZoneUI();
+                }
+
             } catch (error) {
                 if (!isEStop) {
                     alert("Sequence Aborted: Target Coordinate or Hover Coordinate exceeds physical reach constraints.");
-                    document.getElementById('moveMode').innerText = "ERROR";
+                    isAutoBatchActive = false; 
+                    updateDropZoneUI();
                 }
             }
             
-            if (!isEStop) { appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; updateUIState(); }
-        }
-
-        async function init3DViewer() {
-            try {
-                let res = await fetch(`/kinematics?q1=0&q2=0&q3=0&q4=0&q5=0&q6=0`);
-                let data = await res.json();
-                if (data.status === "success") {
-                    let ee = data.joints[data.joints.length - 1];
-                    lastPos = { x: ee[0], y: ee[1], z: ee[2] };
-                    renderArm(data.joints);
+            if (!isEStop) { 
+                appState = isSimulation ? 'READY_TO_PICK' : 'WAITING_FOR_OBJ'; 
+                updateUIState(); 
+                
+                if (isAutoBatchActive && isSimulation) {
+                    setTimeout(executeHybridSequence, 1000);
                 }
-            } catch (e) {
-                renderArm([[0,0,0], [0,0,125], [0,0,285], [0,0,335], [0,0,620], [0,0,700]]);
             }
         }
-        init3DViewer();
+
+        // ==============================================================================
+        // MASTER SCADA POLLING LOOP (Reads State from Python Live)
+        // ==============================================================================
+        setInterval(async () => {
+            try {
+                let res = await fetch('/telemetry');
+                let data = await res.json();
+
+                // 1. Sync 3D Geometry
+                if (data.joints && data.matrices) {
+                    renderArm(data.joints, data.matrices);
+                }
+
+                // 2. Sync UI Sliders when Python is autonomously running a macro
+                if (data.status === "MOVING") {
+                    for (let i = 1; i <= 6; i++) {
+                        let angle = parseFloat(data.angles[i-1]).toFixed(1);
+                        document.getElementById(`q${i}`).value = angle;
+                        if(document.activeElement !== document.getElementById(`num${i}`)) {
+                            document.getElementById(`num${i}`).value = angle;
+                        }
+                    }
+                    document.getElementById('moveMode').innerText = "MOVING";
+                    document.getElementById('moveMode').style.color = "var(--accent-purple)";
+                } else if (data.status === "IDLE") {
+                    document.getElementById('moveMode').innerText = "IDLE";
+                    document.getElementById('moveMode').style.color = "var(--text-muted)";
+                } else if (data.status === "ESTOPPED") {
+                    document.getElementById('moveMode').innerText = "HALTED";
+                    document.getElementById('moveMode').style.color = "var(--danger)";
+                }
+
+                // 3. Process Trajectory Math Memory (No Live Graph Updates)
+                if (data.joints) {
+                    let isMoving = (data.status === "MOVING");
+
+                    // Only push telemetry to the charts in the background while moving OR on the exact frame it stops
+                    if (isMoving || (wasMoving && !isMoving)) {
+                        let ee = data.joints[data.joints.length - 1];
+                        let curPos = { x: ee[0], y: ee[1], z: ee[2] };
+                        let vel = { x: data.velocity[0], y: data.velocity[1], z: data.velocity[2] };
+                        let acc = { x: data.acceleration[0], y: data.acceleration[1], z: data.acceleration[2] };
+
+                        posChart.data.datasets[0].data.shift(); posChart.data.datasets[0].data.push(curPos.x);
+                        posChart.data.datasets[1].data.shift(); posChart.data.datasets[1].data.push(curPos.y);
+                        posChart.data.datasets[2].data.shift(); posChart.data.datasets[2].data.push(curPos.z);
+
+                        velChart.data.datasets[0].data.shift(); velChart.data.datasets[0].data.push(vel.x);
+                        velChart.data.datasets[1].data.shift(); velChart.data.datasets[1].data.push(vel.y);
+                        velChart.data.datasets[2].data.shift(); velChart.data.datasets[2].data.push(vel.z);
+
+                        accChart.data.datasets[0].data.shift(); accChart.data.datasets[0].data.push(acc.x);
+                        accChart.data.datasets[1].data.shift(); accChart.data.datasets[1].data.push(acc.y);
+                        accChart.data.datasets[2].data.shift(); accChart.data.datasets[2].data.push(acc.z);
+
+                        let selectedJointIdx = parseInt(document.getElementById('jointSelect').value);
+                        let jPos = parseFloat(data.angles[selectedJointIdx]);
+                        let jVel = parseFloat(data.joint_velocity[selectedJointIdx]);
+                        let jAcc = parseFloat(data.joint_acceleration[selectedJointIdx]);
+                        
+                        jointPosChart.data.datasets[0].data.shift(); jointPosChart.data.datasets[0].data.push(jPos);
+                        jointVelChart.data.datasets[0].data.shift(); jointVelChart.data.datasets[0].data.push(jVel);
+                        jointAccChart.data.datasets[0].data.shift(); jointAccChart.data.datasets[0].data.push(jAcc);
+                    }
+
+                    // TRIGGER PLOTTING ONLY AFTER MACRO HAS COMPLETELY FINISHED
+                    if (wasMoving && !isMoving) {
+                        if (currentView === 'telemetry') {
+                            posChart.update(); velChart.update(); accChart.update();
+                            jointPosChart.update(); jointVelChart.update(); jointAccChart.update();
+                        }
+                    }
+
+                    wasMoving = isMoving;
+                }
+            } catch(e) {}
+        }, 20); // Exactly 50Hz sync to match the backend trajectory generator
+        
         updateUIState();
     </script>
 </body> 
