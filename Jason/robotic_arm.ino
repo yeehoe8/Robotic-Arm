@@ -54,7 +54,7 @@ void setup() {
 
 void loop() {
   // ==========================================
-  // 1. HARDWARE SENSOR LOGIC (INSTANT HALT + 500ms SETTLE)
+  // 1. HARDWARE SENSOR LOGIC (INSTANT HALT + 10ms SETTLE)
   // ==========================================
   if (!eStopActive) {
       bool currentIrState = digitalRead(irSensorPin);
@@ -67,8 +67,8 @@ void loop() {
                   isVerifying = true;
                   verifyStartTime = millis();
               } 
-              // 2. CONTINUOUS FILTER: If it stays for 500ms continuously, THEN stop the belt
-              else if (millis() - verifyStartTime >= 200) {
+              // 2. CONTINUOUS FILTER: If it stays for 10ms continuously, THEN stop the belt
+              else if (millis() - verifyStartTime >= 10) {
                   digitalWrite(conveyorPin, LOW); // Stop the conveyor NOW
                   waitingForPickup = true;        // Flag ready for Python
                   isVerifying = false;            // Reset the tracker
